@@ -1,0 +1,12 @@
+CREATE TABLE [zcj010] (
+    [ZCJ_FILIAL] VARCHAR(10) NOT NULL DEFAULT ('          '),
+    [ZCJ_ETAPA] VARCHAR(6) NOT NULL DEFAULT ('      '),
+    [ZCJ_DESCRI] VARCHAR NULL,
+    [ZCJ_USUGIR] VARCHAR(30) NOT NULL DEFAULT ('                              '),
+    [ZCJ_DATA] VARCHAR(8) NOT NULL DEFAULT ('        '),
+    [ZCJ_HORA] VARCHAR(5) NOT NULL DEFAULT ('     '),
+    [D_E_L_E_T_] VARCHAR(1) NOT NULL DEFAULT (' '),
+    [R_E_C_N_O_] BIGINT NOT NULL DEFAULT ((0)),
+    [R_E_C_D_E_L_] BIGINT NOT NULL DEFAULT ((0)),
+    CONSTRAINT [PK_zcj010] PRIMARY KEY ([R_E_C_N_O_])
+);

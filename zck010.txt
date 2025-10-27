@@ -1,0 +1,12 @@
+CREATE TABLE [zck010] (
+    [ZCK_FILIAL] VARCHAR(10) NOT NULL DEFAULT ('          '),
+    [ZCK_TIPO] VARCHAR(3) NOT NULL DEFAULT ('   '),
+    [ZCK_DESCRI] VARCHAR(70) NOT NULL DEFAULT ('                                                                      '),
+    [ZCK_USUGIR] VARCHAR(30) NOT NULL DEFAULT ('                              '),
+    [ZCK_DATA] VARCHAR(8) NOT NULL DEFAULT ('        '),
+    [ZCK_HORA] VARCHAR(5) NOT NULL DEFAULT ('     '),
+    [D_E_L_E_T_] VARCHAR(1) NOT NULL DEFAULT (' '),
+    [R_E_C_N_O_] BIGINT NOT NULL DEFAULT ((0)),
+    [R_E_C_D_E_L_] BIGINT NOT NULL DEFAULT ((0)),
+    CONSTRAINT [PK_zck010] PRIMARY KEY ([R_E_C_N_O_])
+);
