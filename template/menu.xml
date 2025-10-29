@@ -111,9 +111,13 @@
         
     <menuitem label='Auditoria'>
         <menu>
-            <menuitem label='datagrid'>
+            <menuitem label='Histórico auditoria'>
                 <icon></icon>
-                <action>datagrid</action>
+                <action>HistoricoList</action>
+            </menuitem>
+            <menuitem label='checkList'>
+                <icon></icon>
+                <action>checkList</action>
             </menuitem>
         </menu>
     </menuitem>
