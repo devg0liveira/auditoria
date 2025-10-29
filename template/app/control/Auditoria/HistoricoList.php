@@ -109,6 +109,7 @@ class Datagrid extends TPage
 
 // app/control/HistoricoList.php
 
+use Adianti\Control\TAction;
 use Adianti\Control\TPage;
 use Adianti\Widget\Container\TPanelGroup;
 use Adianti\Widget\Datagrid\TDataGrid;
@@ -122,6 +123,7 @@ use Adianti\Database\TRepository;
 use Adianti\Database\TCriteria;
 use Adianti\Registry\TSession;
 use Adianti\Core\AdiantiCoreApplication;
+use Adianti\Database\TFilter;
 
 class HistoricoList extends TPage
 {
@@ -154,9 +156,11 @@ class HistoricoList extends TPage
 
         // === AÇÕES ===
         // Nova Auditoria
-        $action_nova = new TDataGridAction(['InicioAuditoriaModal', 'onClear']);
-        $action_nova->setLabel('Nova Auditoria');
-        $action_nova->setImage('fa:plus-circle green');
+        $action_nova = new TDataGridAction(['inicioAuditoriaModal', 'onClear']);
+$action_nova->setLabel('Nova Auditoria');
+$action_nova->setImage('fa:plus-circle green');
+$action_nova->setField('R_E_C_N_O_'); // campo usado como parâmetro
+$this->datagrid->addAction($action_nova);
 
         // Visualizar
         $action_view = new TDataGridAction([__CLASS__, 'onViewStatic'], ['key' => '{R_E_C_N_O_}']);
@@ -172,8 +176,7 @@ class HistoricoList extends TPage
         $panel = new TPanelGroup('Histórico de Auditorias');
         $panel->add($this->datagrid);
 
-        $btn_nova = TButton::create('nova', ['InicioAuditoriaModal', 'onClear'], 'Nova Auditoria', 'fa:plus-circle green');
-        $panel->addFooter($btn_nova);
+        
 
         parent::add($panel);
     }
@@ -182,39 +185,41 @@ class HistoricoList extends TPage
     // CARREGA DADOS
     // ==============================================================
     public function onReload()
-    {
-        try {
-            TTransaction::open('auditoria');
+{
+    try {
+        TTransaction::open('auditoria');
 
-            $repository = new TRepository('ZCM010');
-            $criteria   = new TCriteria;
+        $repository = new TRepository('ZCM010');
+        $criteria   = new TCriteria;
 
-            // JOIN COM SUBQUERY (COMPATÍVEL COM ADIANTI 7.4)
-            $criteria->addJoin(
-                '(SELECT R_E_C_N_O_, ZCK_TIPO, ZCK_DESCRI FROM ZCK010 WHERE D_E_L_E_T_ <> \'*\') AS ZCK010',
-                'LEFT',
-                'ZCM_TIPO',
-                'ZCK_TIPO'
-            );
+        // Remove o addJoin - não existe no Adianti 7.4
+        $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
+        $criteria->setProperty('order', 'ZCM_DATA DESC, ZCM_HORA DESC');
 
-            $criteria->add('ZCM010.D_E_L_E_T_', '<>', '*');
-            $criteria->setProperty('order', 'ZCM010.ZCM_DATA DESC, ZCM010.ZCM_HORA DESC');
+        $auditorias = $repository->load($criteria);
+        $this->datagrid->clear();
 
-            $auditorias = $repository->load($criteria);
-            $this->datagrid->clear();
-
+        if ($auditorias) {
             foreach ($auditorias as $auditoria) {
-                $auditoria->ZCK_DESCRI = $auditoria->zck010 ? $auditoria->zck010->ZCK_DESCRI : 'N/A';
+                // Busca a descrição do tipo de auditoria separadamente
+                $tipo = ZCK010::where('ZCK_TIPO', '=', $auditoria->ZCM_TIPO)
+                              ->where('D_E_L_E_T_', '<>', '*')
+                              ->first();
+                
+                $auditoria->ZCK_DESCRI = $tipo ? $tipo->ZCK_DESCRI : 'N/A';
                 $auditoria->ZCM_DATA   = $this->formatarData($auditoria->ZCM_DATA);
                 $auditoria->score_total = number_format($this->calcularScoreTotal($auditoria->ZCM_FILIAL, $auditoria->ZCM_DOC), 1) . '%';
+                
                 $this->datagrid->addItem($auditoria);
             }
-
-            TTransaction::close();
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
         }
+
+        TTransaction::close();
+    } catch (Exception $e) {
+        new TMessage('error', $e->getMessage());
+        TTransaction::rollback();
     }
+}
 
     // ==============================================================
     // CALCULA SCORE

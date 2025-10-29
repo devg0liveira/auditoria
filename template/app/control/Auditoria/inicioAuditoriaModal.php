@@ -12,7 +12,7 @@ use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
 
-class InicioAuditoriaModal extends TPage
+class inicioAuditoriaModal extends TPage
 {
     private $form;
 
@@ -46,6 +46,7 @@ class InicioAuditoriaModal extends TPage
         parent::add($this->form);
     }
 
+
     public function onAvancar($param)
     {
         $data = $this->form->getData();
@@ -59,6 +60,5 @@ class InicioAuditoriaModal extends TPage
 
         AdiantiCoreApplication::loadPage('CheckListForm', 'onStart');
     }
-
-    public function onClear() { }
+    public function onClear() {}
 }
