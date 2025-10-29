@@ -119,6 +119,18 @@
                 <icon></icon>
                 <action>checkList</action>
             </menuitem>
+            <menuitem label='inspercoes'>
+                <icon></icon>
+                <action>inspercoes</action>
+            </menuitem>
+            <menuitem label='descricoes'>
+                <icon></icon>
+                <action>descricoes</action>
+            </menuitem>
+            <menuitem label=''>
+                <icon></icon>
+                <action></action>
+            </menuitem>
         </menu>
     </menuitem>
     
