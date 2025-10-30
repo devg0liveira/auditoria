@@ -155,20 +155,13 @@ class HistoricoList extends TPage
         $this->datagrid->addColumn($col_score);
 
         // === AÇÕES ===
-        // Nova Auditoria
-        $action_nova = new TDataGridAction(['inicioAuditoriaModal', 'onClear']);
-        $action_nova->setLabel('Nova Auditoria');
-        $action_nova->setImage('fa:plus-circle green');
-        $action_nova->setField('R_E_C_N_O_'); // campo usado como parâmetro
-        $this->datagrid->addAction($action_nova);
 
-        // Visualizar
+
         $action_view = new TDataGridAction([__CLASS__, 'onViewStatic'], ['key' => '{R_E_C_N_O_}']);
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
-
-        $this->datagrid->addAction($action_nova);
         $this->datagrid->addAction($action_view);
+
 
         $this->datagrid->createModel();
 
@@ -176,7 +169,14 @@ class HistoricoList extends TPage
         $panel = new TPanelGroup('Histórico de Auditorias');
         $panel->add($this->datagrid);
 
-
+        $btn_nova = new TButton('btn_nova');
+        $btn_nova->setLabel('Nova auditoria');
+        $btn_nova->setImage('fa:plus-circle green');
+        $btn_nova->addFunction("
+    __adianti_load_page('engine.php?class=inicioAuditoriaModal');
+    ");
+        $btn_nova->class = 'btn btn-success'; // Corrigido: 'sucess' → 'success'
+        $panel->addHeaderWidget($btn_nova);
 
         parent::add($panel);
     }
