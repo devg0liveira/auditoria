@@ -127,6 +127,14 @@
                 <icon></icon>
                 <action>descricoes</action>
             </menuitem>
+            <menuitem label='inicioAuditoriaModal'>
+                <icon></icon>
+                <action>inicioAuditoriaModal</action>
+            </menuitem>
+            <menuitem label='CheckListForm'>
+                <icon></icon>
+                <action>CheckListForm</action>
+            </menuitem>
             <menuitem label=''>
                 <icon></icon>
                 <action></action>

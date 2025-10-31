@@ -170,8 +170,8 @@ class HistoricoList extends TPage
         // === PAINEL ===
         $panel = TPanelGroup::pack('Histórico de Auditorias', $this->datagrid);
 
-        // Widget de busca
-        $input_search = new TEntry('input_search');
+        
+        /*$input_search = new TEntry('input_search');
         $input_search->placeholder = 'Buscar';
         $input_search->setSize('100%');
         $this->datagrid->enableSearch(
@@ -179,14 +179,14 @@ class HistoricoList extends TPage
             'R_E_C_N_O_, ZCM_DOC, ZCM_FILIAL, ZCK_DESCRI, ZCM_DATA, ZCM_HORA, ZCM_USUGIR'
         );
         $panel->addHeaderWidget($input_search);
+        */
 
         // Botão Nova auditoria
         $panel->addHeaderActionLink(
             'Nova auditoria',
-            new TAction(['InicioAuditoriaModal', 'onOpenCurtain']),
+            new TAction(['inicioAuditoriaModal', 'onOpenCurtain']),
             'fa:plus-circle green'
         );
-
         parent::add($panel);
     }
 

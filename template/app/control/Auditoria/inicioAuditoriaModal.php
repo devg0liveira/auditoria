@@ -10,12 +10,11 @@ use Adianti\Widget\Form\TCombo;
 use Adianti\Widget\Form\TLabel;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Container\TPanel;
-use Adianti\Widget\Util\TScript;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
 use Adianti\Widget\Base\TElement;
-use Adianti\Widget\Base\TScript as BaseTScript;
+use Adianti\Widget\Base\TScript;
 
 class inicioAuditoriaModal extends TPage
 {
@@ -53,10 +52,10 @@ class inicioAuditoriaModal extends TPage
 
         // === CARREGA TIPOS DA TABELA ZCK010 ===
         $items = ['' => 'Selecione um tipo'];
-        
+
         try {
             TTransaction::open('auditoria');
-            
+
             $tipos = ZCK010::where('D_E_L_E_T_', '<>', '*')
                 ->orderBy('ZCK_DESCRI')
                 ->load();
@@ -73,7 +72,6 @@ class inicioAuditoriaModal extends TPage
             }
 
             TTransaction::close();
-
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao carregar tipos: ' . $e->getMessage());
             $items = array_merge(['' => 'Selecione um tipo'], $itensFixos);
@@ -100,20 +98,26 @@ class inicioAuditoriaModal extends TPage
         $novoContainer->add(new TLabel('Descrição do novo tipo:'));
         $novoContainer->add($novoTipoDesc);
 
-        // === JAVASCRIPT PARA MOSTRAR/OCULTAR CAMPOS ===
-        $script = "
-            document.addEventListener('DOMContentLoaded', function() {
-                const combo = document.querySelector('[name=ZCM_TIPO]');
-                const container = document.getElementById('novo-tipo-container');
+        // === ADICIONA O CONTAINER AO FORMULÁRIO ===
+        $this->form->addContent([$novoContainer]);
 
-                if (combo && container) {
-                    combo.addEventListener('change', function() {
-                        container.style.display = this.value === 'NOVO' ? 'block' : 'none';
-                    });
-                }
-            });
-        ";
-        BaseTScript::create($script);
+        // === JAVASCRIPT COM TScript::create() (MÉTODO CORRETO) ===
+        $script = <<<JS
+        document.addEventListener('DOMContentLoaded', function() {
+            const combo = document.querySelector('[name="ZCM_TIPO"]');
+            const container = document.getElementById('novo-tipo-container');
+            
+            if (combo && container) {
+                const toggle = () => {
+                    container.style.display = combo.value === 'NOVO' ? 'block' : 'none';
+                };
+                combo.addEventListener('change', toggle);
+                toggle(); // estado inicial
+            }
+        });
+JS;
+
+        TScript::create($script);
 
         // === CONFIGURAÇÕES DOS CAMPOS ===
         $filial->setValue(TSession::getValue('filial') ?? '');
@@ -144,7 +148,6 @@ class inicioAuditoriaModal extends TPage
             $page->add($embed->form);
             $page->setIsWrapped(true);
             $page->show();
-
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }
@@ -227,7 +230,6 @@ class inicioAuditoriaModal extends TPage
 
             // Fecha a janela atual após abrir a próxima
             TWindow::closeWindow();
-
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
             if (isset($data)) {
