@@ -111,6 +111,7 @@ class Datagrid extends TPage
 
 use Adianti\Control\TAction;
 use Adianti\Control\TPage;
+use Adianti\Control\TWindow;
 use Adianti\Widget\Container\TPanelGroup;
 use Adianti\Widget\Datagrid\TDataGrid;
 use Adianti\Widget\Datagrid\TDataGridColumn;
@@ -124,26 +125,30 @@ use Adianti\Database\TCriteria;
 use Adianti\Registry\TSession;
 use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Database\TFilter;
+use Adianti\Widget\Form\TEntry;
 
 class HistoricoList extends TPage
 {
-    private $datagrid;
+    protected $datagrid;
 
+    /**
+     * Construtor
+     */
     public function __construct()
     {
         parent::__construct();
 
-        $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
+        $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid());
 
         // === COLUNAS ===
-        $col_id     = new TDataGridColumn('R_E_C_N_O_', 'ID', 'center', '8%');
-        $col_doc    = new TDataGridColumn('ZCM_DOC', 'Nº Auditoria', 'center', '12%');
+        $col_id = new TDataGridColumn('R_E_C_N_O_', 'ID', 'center', '8%');
+        $col_doc = new TDataGridColumn('ZCM_DOC', 'Nº Auditoria', 'center', '12%');
         $col_filial = new TDataGridColumn('ZCM_FILIAL', 'Filial', 'center', '10%');
-        $col_tipo   = new TDataGridColumn('ZCK_DESCRI', 'Tipo', 'left', '25%');
-        $col_data   = new TDataGridColumn('ZCM_DATA', 'Data', 'center', '15%');
-        $col_hora   = new TDataGridColumn('ZCM_HORA', 'Hora', 'center', '10%');
-        $col_user   = new TDataGridColumn('ZCM_USUGIR', 'Usuário', 'left', '15%');
-        $col_score  = new TDataGridColumn('score_total', 'Score %', 'center', '10%');
+        $col_tipo = new TDataGridColumn('ZCK_DESCRI', 'Tipo', 'left', '25%');
+        $col_data = new TDataGridColumn('ZCM_DATA', 'Data', 'center', '15%');
+        $col_hora = new TDataGridColumn('ZCM_HORA', 'Hora', 'center', '10%');
+        $col_user = new TDataGridColumn('ZCM_USUGIR', 'Usuário', 'left', '15%');
+        $col_score = new TDataGridColumn('score_total', 'Score %', 'center', '10%');
 
         $this->datagrid->addColumn($col_id);
         $this->datagrid->addColumn($col_doc);
@@ -155,44 +160,47 @@ class HistoricoList extends TPage
         $this->datagrid->addColumn($col_score);
 
         // === AÇÕES ===
-
-
         $action_view = new TDataGridAction([__CLASS__, 'onViewStatic'], ['key' => '{R_E_C_N_O_}']);
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
 
-
         $this->datagrid->createModel();
 
         // === PAINEL ===
-        $panel = new TPanelGroup('Histórico de Auditorias');
-        $panel->add($this->datagrid);
+        $panel = TPanelGroup::pack('Histórico de Auditorias', $this->datagrid);
 
-        $btn_nova = new TButton('btn_nova');
-        $btn_nova->setLabel('Nova auditoria');
-        $btn_nova->setImage('fa:plus-circle green');
-        $btn_nova->addFunction("
-    __adianti_load_page('engine.php?class=inicioAuditoriaModal');
-    ");
-        $btn_nova->class = 'btn btn-success'; // Corrigido: 'sucess' → 'success'
-        $panel->addHeaderWidget($btn_nova);
+        // Widget de busca
+        $input_search = new TEntry('input_search');
+        $input_search->placeholder = 'Buscar';
+        $input_search->setSize('100%');
+        $this->datagrid->enableSearch(
+            $input_search,
+            'R_E_C_N_O_, ZCM_DOC, ZCM_FILIAL, ZCK_DESCRI, ZCM_DATA, ZCM_HORA, ZCM_USUGIR'
+        );
+        $panel->addHeaderWidget($input_search);
+
+        // Botão Nova auditoria
+        $panel->addHeaderActionLink(
+            'Nova auditoria',
+            new TAction(['InicioAuditoriaModal', 'onOpenCurtain']),
+            'fa:plus-circle green'
+        );
 
         parent::add($panel);
     }
 
-    // ==============================================================
-    // CARREGA DADOS
-    // ==============================================================
+    /**
+     * Carrega dados da lista
+     */
     public function onReload()
     {
         try {
             TTransaction::open('auditoria');
 
             $repository = new TRepository('ZCM010');
-            $criteria   = new TCriteria;
+            $criteria = new TCriteria();
 
-            // Remove o addJoin - não existe no Adianti 7.4
             $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
             $criteria->setProperty('order', 'ZCM_DATA DESC, ZCM_HORA DESC');
 
@@ -201,74 +209,87 @@ class HistoricoList extends TPage
 
             if ($auditorias) {
                 foreach ($auditorias as $auditoria) {
-                    // Busca a descrição do tipo de auditoria separadamente
+                    // Busca a descrição do tipo de auditoria
                     $tipo = ZCK010::where('ZCK_TIPO', '=', $auditoria->ZCM_TIPO)
                         ->where('D_E_L_E_T_', '<>', '*')
                         ->first();
 
                     $auditoria->ZCK_DESCRI = $tipo ? $tipo->ZCK_DESCRI : 'N/A';
-                    $auditoria->ZCM_DATA   = $this->formatarData($auditoria->ZCM_DATA);
-                    $auditoria->score_total = number_format($this->calcularScoreTotal($auditoria->ZCM_FILIAL, $auditoria->ZCM_DOC), 1) . '%';
+                    $auditoria->ZCM_DATA = $this->formatarData($auditoria->ZCM_DATA);
+                    $auditoria->score_total = number_format(
+                        $this->calcularScoreTotal($auditoria->ZCM_FILIAL, $auditoria->ZCM_DOC),
+                        1
+                    ) . '%';
 
                     $this->datagrid->addItem($auditoria);
                 }
             }
 
             TTransaction::close();
+
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
             TTransaction::rollback();
         }
     }
 
-    // ==============================================================
-    // CALCULA SCORE
-    // ==============================================================
+    /**
+     * Calcula o score total de uma auditoria
+     */
     private function calcularScoreTotal($filial, $doc)
     {
         try {
             TTransaction::open('auditoria');
 
+            // Soma dos scores das respostas
             $respostas = ZCN010::where('ZCN_FILIAL', '=', $filial)
                 ->where('ZCN_DOC', '=', $doc)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->load();
 
             $total_score = 0;
-            foreach ($respostas as $r) {
-                if ($r->ZCN_NAOCO !== 'N') {
-                    $total_score += $r->ZCN_SCORE;
+            if ($respostas) {
+                foreach ($respostas as $r) {
+                    if ($r->ZCN_NAOCO !== 'N') {
+                        $total_score += (float) $r->ZCN_SCORE;
+                    }
                 }
             }
 
+            // Soma dos pesos totais
             $total_peso = ZCL010::where('ZCL_FILIAL', '=', $filial)
                 ->where('D_E_L_E_T_', '<>', '*')
-                ->sum('ZCL_SCORE');
+                ->sumBy('ZCL_SCORE');
 
             TTransaction::close();
+
             return $total_peso > 0 ? ($total_score / $total_peso) * 100 : 0;
+
         } catch (Exception $e) {
+            TTransaction::rollback();
             return 0;
         }
     }
 
-    // ==============================================================
-    // FORMATA DATA
-    // ==============================================================
+    /**
+     * Formata data de AAAAMMDD para DD/MM/AAAA
+     */
     private function formatarData($data)
     {
-        return (strlen($data) == 8) ?
-            substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4) :
-            $data;
+        if (strlen($data) == 8) {
+            return substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4);
+        }
+        return $data;
     }
 
-    // ==============================================================
-    // VISUALIZAR AUDITORIA
-    // ==============================================================
+    /**
+     * Visualiza uma auditoria em modal
+     */
     public static function onViewStatic($param)
     {
         try {
             $key = $param['key'] ?? null;
+            
             if (!$key) {
                 throw new Exception('ID da auditoria não informado.');
             }
@@ -277,22 +298,34 @@ class HistoricoList extends TPage
             $auditoria = ZCM010::find($key);
 
             if (!$auditoria || $auditoria->D_E_L_E_T_ === '*') {
+                TTransaction::close();
                 throw new Exception('Auditoria não encontrada ou excluída.');
             }
+            
+            TTransaction::close();
+
+            // Abre modal de visualização
+            $page = TWindow::create('Visualizar Auditoria', 0.8, 0.8);
+            $page->removePadding();
 
             TSession::setValue('auditoria_key', $key);
             TSession::setValue('view_mode', true);
 
-            AdiantiCoreApplication::loadPage('CheckListForm', 'onEdit', $param);
-            TTransaction::close();
+            $embed = new CheckListForm();
+            $embed->onEdit($param);
+
+            $page->add($embed);
+            $page->setIsWrapped(true);
+            $page->show();
+
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }
     }
 
-    // ==============================================================
-    // SHOW
-    // ==============================================================
+    /**
+     * Exibe a página e carrega os dados
+     */
     public function show()
     {
         $this->onReload();
