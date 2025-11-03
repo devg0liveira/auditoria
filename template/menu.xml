@@ -135,6 +135,14 @@
                 <icon></icon>
                 <action>CheckListForm</action>
             </menuitem>
+            <menuitem label='TipoForm'>
+                <icon></icon>
+                <action>TipoForm</action>
+            </menuitem>
+            <menuitem label='PerguntaForm'>
+                <icon></icon>
+                <action>PerguntaForm</action>
+            </menuitem>
             <menuitem label=''>
                 <icon></icon>
                 <action></action>
