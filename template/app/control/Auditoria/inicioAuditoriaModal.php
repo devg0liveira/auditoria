@@ -1,248 +1,252 @@
 <?php
-// app/control/InicioAuditoriaModal.php
 
-use Adianti\Control\TAction;
 use Adianti\Control\TPage;
-use Adianti\Control\TWindow;
-use Adianti\Core\AdiantiCoreApplication;
-use Adianti\Widget\Form\TEntry;
-use Adianti\Widget\Form\TCombo;
 use Adianti\Widget\Form\TLabel;
-use Adianti\Widget\Dialog\TMessage;
-use Adianti\Widget\Container\TPanel;
+use Adianti\Widget\Form\TCombo;
+use Adianti\Widget\Form\TButton;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
-use Adianti\Registry\TSession;
-use Adianti\Widget\Base\TElement;
+use Adianti\Widget\Container\TVBox;
+use Adianti\Control\TAction;
+use Adianti\Database\TCriteria;
+use Adianti\Database\TFilter;
+use Adianti\Database\TRepository;
+use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Base\TScript;
+use Adianti\Registry\TSession;
 
 class inicioAuditoriaModal extends TPage
 {
-    protected $form;
+    private $form;
 
-    /**
-     * Construtor
-     */
     public function __construct()
     {
         parent::__construct();
 
-        $this->form = new BootstrapFormBuilder('form_inicio');
-        $this->form->setFormTitle('Nova Auditoria');
+        $this->form = new BootstrapFormBuilder('form_inicio_auditoria');
+        $this->form->setFormTitle('Iniciar Nova Auditoria');
 
-        // === CAMPOS ===
-        $filial = new TEntry('ZCM_FILIAL');
-        $tipo = new TCombo('ZCM_TIPO');
+        // === CARREGA FILIAIS (ZCK010 - distinct ZCK_FILIAL + ZCK_DESCRI) ===
+        $filiais = $this->carregarFiliais();
+        $filial = new TCombo('ZCK_FILIAL');
+        $filial->addItems($filiais);
+        $filial->setSize('70%');
+        $filial->setDefaultOption('Selecione a filial...');
 
-        // === TIPOS FIXOS (fallback) ===
-        $itensFixos = [
-            'A'  => 'Almoxarifado',
-            'NF' => 'Entradas de notas fiscais',
-            'ST' => 'Segurança do trabalho - depósito de ferramentas operacionais de rotas',
-            'CC' => 'Controle de combustível interno e externo',
-            'AA' => 'Ordem e serviço',
-            'VI' => 'Vistoria de veículos',
-            'M'  => 'Manutenção',
-            'BM' => 'Boletim de medição',
-            'DP' => 'Departamento pessoal',
-            'FP' => 'Folha de pagamento',
-            'F'  => 'Férias',
-            'EJ' => 'Estagiário / Jovem aprendiz'
-        ];
+        // === CARREGA TIPOS (ZCK010 - distinct ZCK_DESCRI) ===
+        $tipos = $this->carregarTipos();
+        $tipo = new TCombo('ZCK_DESCRI');
+        $tipo->addItems($tipos);
+        $tipo->setSize('70%');
+        $tipo->setDefaultOption('Selecione o tipo...');
 
-        // === CARREGA TIPOS DA TABELA ZCK010 ===
-        $items = ['' => 'Selecione um tipo'];
+        // === CAMPO NOVO TIPO (oculto inicialmente) ===
+        $novo_tipo = new \Adianti\Widget\Form\TEntry('novo_tipo');
+        $novo_tipo->setSize('70%');
+        $novo_tipo->placeholder = 'Digite o novo tipo de auditoria...';
+        $novo_tipo->style = 'display:none';
 
-        try {
-            TTransaction::open('auditoria');
+        // === BOTÃO CONFIRMAR ===
+        $btn_confirmar = new TButton('btn_confirmar');
+        $btn_confirmar->setLabel('Iniciar Auditoria');
+        $btn_confirmar->setImage('fa:play-circle green');
+        $btn_confirmar->setAction(new TAction([$this, 'onConfirmar']));
 
-            $tipos = ZCK010::where('D_E_L_E_T_', '<>', '*')
-                ->orderBy('ZCK_DESCRI')
-                ->load();
+        // === MONTAGEM DO FORMULÁRIO ===
+        $this->form->addFields([new TLabel('Filial <span style="color:red">*</span>:')], [$filial]);
+        $this->form->addFields([new TLabel('Tipo <span style="color:red">*</span>:')], [$tipo]);
+        $this->form->addFields([new TLabel('Novo Tipo:')], [$novo_tipo]);
+        $this->form->addFields([], [$btn_confirmar]);
 
-            foreach ($tipos as $t) {
-                $items[$t->ZCK_TIPO] = $t->ZCK_DESCRI;
-            }
+        $this->form->setFields([$filial, $tipo, $novo_tipo, $btn_confirmar]);
 
-            // Adiciona tipos fixos que ainda não existem na tabela
-            foreach ($itensFixos as $cod => $desc) {
-                if (!isset($items[$cod])) {
-                    $items[$cod] = $desc;
-                }
-            }
-
-            TTransaction::close();
-        } catch (Exception $e) {
-            new TMessage('error', 'Erro ao carregar tipos: ' . $e->getMessage());
-            $items = array_merge(['' => 'Selecione um tipo'], $itensFixos);
-        }
-
-        // === ADICIONA OPÇÃO DE CRIAR NOVO TIPO ===
-        $items['NOVO'] = '-- Criar novo tipo --';
-        $tipo->addItems($items);
-
-        // === CAMPOS PARA NOVO TIPO (inicialmente ocultos) ===
-        $novoTipoCod = new TEntry('NOVO_TIPO_COD');
-        $novoTipoDesc = new TEntry('NOVO_TIPO_DESC');
-
-        $novoTipoCod->setSize('100%');
-        $novoTipoDesc->setSize('100%');
-        $novoTipoCod->placeholder = 'Ex: XX (máx. 3 letras)';
-        $novoTipoDesc->placeholder = 'Descrição completa do novo tipo';
-
-        $novoContainer = new TElement('div');
-        $novoContainer->id = 'novo-tipo-container';
-        $novoContainer->style = 'display: none; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; border-radius: 5px;';
-        $novoContainer->add(new TLabel('Código do novo tipo:'));
-        $novoContainer->add($novoTipoCod);
-        $novoContainer->add(new TLabel('Descrição do novo tipo:'));
-        $novoContainer->add($novoTipoDesc);
-
-        // === ADICIONA O CONTAINER AO FORMULÁRIO ===
-        $this->form->addContent([$novoContainer]);
-
-        // === JAVASCRIPT COM TScript::create() (MÉTODO CORRETO) ===
+        // === SCRIPT PARA MOSTRAR CAMPO NOVO TIPO ===
         $script = <<<JS
         document.addEventListener('DOMContentLoaded', function() {
-            const combo = document.querySelector('[name="ZCM_TIPO"]');
-            const container = document.getElementById('novo-tipo-container');
-            
-            if (combo && container) {
-                const toggle = () => {
-                    container.style.display = combo.value === 'NOVO' ? 'block' : 'none';
-                };
-                combo.addEventListener('change', toggle);
-                toggle(); // estado inicial
+            const comboTipo = document.querySelector('[name="ZCK_DESCRI"]');
+            const inputNovoTipo = document.querySelector('[name="novo_tipo"]');
+            const labelNovoTipo = inputNovoTipo.closest('.form-row').querySelector('.control-label');
+
+            if (comboTipo && inputNovoTipo) {
+                function toggleNovoTipo() {
+                    const isNovo = comboTipo.value === 'NOVO';
+                    inputNovoTipo.style.display = isNovo ? 'block' : 'none';
+                    labelNovoTipo.style.display = isNovo ? 'block' : 'none';
+                    if (isNovo) inputNovoTipo.focus();
+                    else inputNovoTipo.value = '';
+                }
+                comboTipo.addEventListener('change', toggleNovoTipo);
+                toggleNovoTipo();
             }
         });
 JS;
-
         TScript::create($script);
 
-        // === CONFIGURAÇÕES DOS CAMPOS ===
-        $filial->setValue(TSession::getValue('filial') ?? '');
-        $filial->setSize('100%');
-        $tipo->setSize('100%');
-
-        // === MONTAGEM DO FORMULÁRIO ===
-        $this->form->addFields([new TLabel('Filial *', '#333')], [$filial]);
-        $this->form->addFields([new TLabel('Tipo de Auditoria *', '#333')], [$tipo]);
-        $this->form->addContent([$novoContainer]);
-
-        $this->form->addAction('Avançar', new TAction([$this, 'onAvancar']), 'fa:arrow-right green');
-
-        parent::add($this->form);
+        // === CONTAINER ===
+        $container = new TVBox;
+        $container->style = 'width: 100%';
+        $container->add($this->form);
+        parent::add($container);
     }
 
     /**
-     * Abre a modal de nova auditoria
+     * Carrega filiais únicas do ZCK010
      */
-    public static function onOpenCurtain($param = null)
+    private function carregarFiliais()
+{
+    try {
+        TTransaction::open('auditoria');
+        $conn = TTransaction::get();
+
+        $sql = "
+            SELECT DISTINCT ZCK_FILIAL, ZCK_DESCRI
+            FROM ZCK010
+            WHERE D_E_L_E_T_ <> '*'
+              AND ZCK_FILIAL IS NOT NULL
+              AND ZCK_DESCRI IS NOT NULL
+            ORDER BY ZCK_DESCRI
+        ";
+
+        $result = $conn->query($sql);
+
+        $items = [];
+        foreach ($result as $row) {
+            $cod = trim($row['ZCK_FILIAL']);
+            $nome = trim($row['ZCK_DESCRI']);
+            if ($cod && $nome) {
+                $items[$cod] = $nome;
+            }
+        }
+
+        TTransaction::close();
+        return $items;
+
+    } catch (Exception $e) {
+        if (TTransaction::get()) {
+            TTransaction::rollback();
+        }
+        new TMessage('error', 'Erro ao carregar filiais: ' . $e->getMessage());
+        return [];
+    }
+}
+
+
+
+    /**
+     * Carrega tipos únicos do ZCK010 (baseado em ZCK_DESCRI)
+     */
+   private function carregarTipos()
+{
+    try {
+        TTransaction::open('auditoria');
+        $conn = TTransaction::get();
+
+        $sql = "
+            SELECT DISTINCT ZCK_DESCRI
+            FROM ZCK010
+            WHERE D_E_L_E_T_ <> '*'
+              AND ZCK_DESCRI IS NOT NULL
+              AND ZCK_DESCRI <> ''
+            ORDER BY ZCK_DESCRI
+        ";
+
+        $result = $conn->query($sql);
+
+        $items = [];
+        foreach ($result as $row) {
+            $descricao = trim($row['ZCK_DESCRI']);
+            if ($descricao) {
+                $items[$descricao] = $descricao;
+            }
+        }
+
+        $items['NOVO'] = 'Criar Novo Tipo...';
+
+        TTransaction::close();
+        return $items;
+
+    } catch (Exception $e) {
+        if (TTransaction::get()) {
+            TTransaction::rollback();
+        }
+        new TMessage('error', 'Erro ao carregar tipos: ' . $e->getMessage());
+        return ['NOVO' => 'Criar Novo Tipo...'];
+    }
+}
+
+    /**
+     * Ação do botão confirmar
+     */
+    public static function onConfirmar($param)
     {
         try {
-            $page = TWindow::create('Nova Auditoria', 600, null);
-            $page->removePadding();
+            $data = $param;
 
-            $embed = new self();
+            // Validações
+            if (empty($data['ZCK_FILIAL'])) {
+                throw new Exception('Selecione a filial.');
+            }
+            if (empty($data['ZCK_DESCRI']) || $data['ZCK_DESCRI'] === 'NOVO') {
+                if (empty($data['novo_tipo'])) {
+                    throw new Exception('Digite o novo tipo de auditoria.');
+                }
+            }
 
-            $page->add($embed->form);
-            $page->setIsWrapped(true);
-            $page->show();
+            TTransaction::open('auditoria');
+
+            // === DEFINE TIPO FINAL (ZCK_DESCRI) ===
+            $tipoDescricao = $data['ZCK_DESCRI'];
+            if ($data['ZCK_DESCRI'] === 'NOVO') {
+                $tipoDescricao = trim($data['novo_tipo']);
+            }
+
+            // === GERA PRÓXIMO ZCK_TIPO (ID numérico sequencial) ===
+            $maxTipo = ZCK010::max('ZCK_TIPO') ?? 0;
+            $novoTipoId = str_pad($maxTipo + 1, 3, '0', STR_PAD_LEFT); // 001, 002...
+
+            // === GERA NÚMERO DA AUDITORIA (ZCK_DOC) ===
+            $ano = date('Y');
+            $seq = ZCK010::where('ZCK_DOC', 'LIKE', $ano . '%')
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->count();
+            $seq = str_pad($seq + 1, 4, '0', STR_PAD_LEFT);
+            $doc = $ano . $seq;
+
+            // === CRIA AUDITORIA ===
+            $auditoria = new ZCK010;
+            $auditoria->ZCK_FILIAL = $data['ZCK_FILIAL'];
+            $auditoria->ZCK_TIPO   = $novoTipoId;                    // Sempre novo ID
+            $auditoria->ZCK_DESCRI = $tipoDescricao;                 // Nome do tipo
+            $auditoria->ZCK_DATA   = date('Ymd');                    // Hoje
+            $auditoria->ZCK_HORA   = date('His');                    // Agora
+            $auditoria->ZCK_USUGIR = TSession::getValue('userid') ?? 'SYSTEM';
+            $auditoria->ZCK_DOC    = $doc;
+            $auditoria->ZCK_OBS    = '';                             // Será preenchido no checklist
+            $auditoria->store();
+
+            TTransaction::close();
+
+            // === ABRE CHECKLIST ===
+            TScript::create("
+                setTimeout(function() {
+                    __adianti_load_page('index.php?class=CheckListForm&method=onOpenCurtain&filial={$data['ZCK_FILIAL']}&tipo={$novoTipoId}&doc={$doc}');
+                }, 800);
+            ");
+
+            new TMessage('info', "Auditoria {$doc} iniciada com sucesso!");
         } catch (Exception $e) {
+            if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
     }
 
     /**
-     * Método executado ao clicar em Avançar
+     * Abre modal
      */
-    public function onAvancar($param)
+    public static function onOpenCurtain($param)
     {
-        try {
-            $data = $this->form->getData();
-
-            // === VALIDAÇÕES BÁSICAS ===
-            if (empty($data->ZCM_FILIAL)) {
-                throw new Exception('Informe a filial.');
-            }
-
-            if (empty($data->ZCM_TIPO)) {
-                throw new Exception('Selecione o tipo de auditoria.');
-            }
-
-            $tipoFinal = $data->ZCM_TIPO;
-
-            // === SE FOR CRIAR NOVO TIPO ===
-            if ($data->ZCM_TIPO === 'NOVO') {
-                $novoCod = strtoupper(trim($data->NOVO_TIPO_COD ?? ''));
-                $novoDesc = trim($data->NOVO_TIPO_DESC ?? '');
-
-                if (empty($novoCod) || empty($novoDesc)) {
-                    throw new Exception('Preencha código e descrição do novo tipo.');
-                }
-
-                if (strlen($novoCod) > 3) {
-                    throw new Exception('O código do tipo deve ter no máximo 3 caracteres.');
-                }
-
-                if (!preg_match('/^[A-Z0-9]+$/', $novoCod)) {
-                    throw new Exception('O código deve conter apenas letras maiúsculas e números.');
-                }
-
-                TTransaction::open('auditoria');
-
-                // Verifica duplicidade
-                $existe = ZCK010::where('ZCK_TIPO', '=', $novoCod)
-                    ->where('D_E_L_E_T_', '<>', '*')
-                    ->first();
-
-                if ($existe) {
-                    TTransaction::close();
-                    throw new Exception("O tipo '{$novoCod}' já existe.");
-                }
-
-                // Cria novo tipo
-                $novoTipo = new ZCK010();
-                $novoTipo->ZCK_TIPO = $novoCod;
-                $novoTipo->ZCK_DESCRI = $novoDesc;
-                $novoTipo->D_E_L_E_T_ = '';
-                $novoTipo->store();
-
-                TTransaction::close();
-
-                $tipoFinal = $novoCod;
-
-                new TMessage('info', "Novo tipo '{$novoCod}' criado com sucesso!");
-            }
-
-            // === SALVA NA SESSÃO E AVANÇA ===
-            TSession::setValue('auditoria_filial', $data->ZCM_FILIAL);
-            TSession::setValue('auditoria_tipo', $tipoFinal);
-
-            // Limpa campos temporários
-            $this->form->clear();
-
-            // Abre o CheckListForm em modal
-            CheckListForm::onOpenCurtain([
-                'filial' => $data->ZCM_FILIAL,
-                'tipo' => $tipoFinal
-            ]);
-
-            // Fecha a janela atual após abrir a próxima
-            TWindow::closeWindow();
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-            if (isset($data)) {
-                $this->form->setData($data);
-            }
-        }
-    }
-
-    /**
-     * Limpa o formulário
-     */
-    public function onClear()
-    {
-        $this->form->clear();
+        $page = \Adianti\Control\TWindow::create('Iniciar Nova Auditoria', 0.6, 0.5);
+        $page->add(new self());
+        $page->show();
     }
 }
