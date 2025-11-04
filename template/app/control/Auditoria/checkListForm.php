@@ -24,145 +24,85 @@ class checkListForm extends TPage
         parent::add($this->form);
     }
 
-    /**
-     * Carrega checklist (NOVO ou VISUALIZAÇÃO)
-     */
     public function onStart($param)
     {
         try {
-            // Verifica se é modo visualização
             $view_mode = TSession::getValue('view_mode') ?? false;
-            $key = $param['key'] ?? TSession::getValue('auditoria_key');
+            $view_data = TSession::getValue('view_auditoria');
 
-            if ($view_mode && $key) {
-                $this->onEdit(['key' => $key]);
-                return;
-            }
-
-            // === MODO CRIAÇÃO ===
-            $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
-            $tipo   = $param['tipo']   ?? TSession::getValue('auditoria_tipo');
-
-            if (!$filial || !$tipo) {
-                throw new Exception('Filial e tipo são obrigatórios.');
+            $tipo = $param['tipo'] ?? TSession::getValue('auditoria_tipo');
+            if (!$tipo) {
+                throw new Exception('Tipo de auditoria não informado.');
             }
 
             TTransaction::open('auditoria');
 
-            // === BUSCA TIPO ===
+            // === BUSCA TIPO (ZCK010) ===
             $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-                             ->where('D_E_L_E_T_', '<>', '*')
-                             ->first();
-
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->first();
             if (!$tipoObj) {
-                throw new Exception('Tipo de auditoria não encontrado.');
+                throw new Exception('Tipo não encontrado.');
             }
 
-            // === BUSCA PERGUNTAS DO TIPO ===
-            $perguntas = ZCJ010::where('ZCJ_DESCRI', '=', $tipo)
-                               ->where('D_E_L_E_T_', '<>', '*')
-                               ->orderBy('ZCJ_ETAPA')
-                               ->load();
+            // === BUSCA PERGUNTAS (ZCJ010) ===
+            $perguntas = ZCJ010::where('D_E_L_E_T_', '<>', '*')
+                ->orderBy('ZCJ_ETAPA')
+                ->load();
+
 
             if (empty($perguntas)) {
                 throw new Exception('Nenhuma pergunta cadastrada para este tipo.');
             }
 
-            TTransaction::close();
-
-            // === MONTA FORMULÁRIO ===
-            $this->montarFormulario($tipoObj, $filial, $tipo, $perguntas, []);
-
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-            if (TTransaction::get()) TTransaction::rollback();
-        }
-    }
-
-    /**
-     * Carrega auditoria existente para visualização
-     */
-    public function onEdit($param)
-    {
-        try {
-            $key = $param['key'] ?? null;
-            if (!$key) throw new Exception('ID não informado.');
-
-            TTransaction::open('auditoria');
-
-            // Busca cabeçalho
-            $auditoria = ZCK010::find($key);
-            if (!$auditoria || $auditoria->D_E_L_E_T_ === '*') {
-                throw new Exception('Auditoria não encontrada.');
-            }
-
-            $filial = $auditoria->ZCK_FILIAL;
-            $tipo   = $auditoria->ZCK_TIPO;
-            $doc    = $auditoria->ZCK_DOC;
-
-            // Busca tipo
-            $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-                             ->where('D_E_L_E_T_', '<>', '*')
-                             ->first();
-
-            // Busca perguntas
-            $perguntas = ZCJ010::where('ZCJ_DESCRI', '=', $tipo)
-                               ->where('D_E_L_E_T_', '<>', '*')
-                               ->orderBy('ZCJ_ETAPA')
-                               ->load();
-
-            // Busca respostas salvas (ZCN010)
             $respostas_salvas = [];
-            $respostas = ZCN010::where('ZCN_FILIAL', '=', $filial)
-                               ->where('ZCN_DOC', '=', $doc)
-                               ->where('D_E_L_E_T_', '<>', '*')
-                               ->load();
 
-            foreach ($respostas as $r) {
-                $respostas_salvas[$r->ZCN_ETAPA] = $r->ZCN_NAOCO;
+            // === MODO VISUALIZAÇÃO ===
+            if ($view_mode && $view_data) {
+                $respostas = ZCL010::where('ZCL_TIPO', '=', $tipo)
+                    ->where('ZCL_DATA', '=', $view_data['data'])
+                    ->where('ZCL_HORA', '=', $view_data['hora'])
+                    ->where('ZCL_USUARIO', '=', $view_data['usuario'])
+                    ->where('D_E_L_E_T_', '<>', '*')
+                    ->load();
+
+                foreach ($respostas as $r) {
+                    $respostas_salvas[$r->ZCL_ETAPA] = $r->ZCL_RESPOSTA;
+                }
             }
 
             TTransaction::close();
 
-            // Monta formulário em modo visualização
-            $this->montarFormulario($tipoObj, $filial, $tipo, $perguntas, $respostas_salvas, true, $doc);
-
+            $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $view_mode, $view_data);
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
             if (TTransaction::get()) TTransaction::rollback();
         }
     }
 
-    /**
-     * Monta o formulário dinamicamente
-     */
-    private function montarFormulario($tipoObj, $filial, $tipo, $perguntas, $respostas_salvas, $readonly = false, $doc = null)
+    private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $readonly = false, $view_data = null)
     {
         $this->form = new BootstrapFormBuilder('form_checklist');
-        
-        $titulo = $readonly 
-            ? "Visualização: {$tipoObj->ZCK_DESCRI} - Doc: {$doc}" 
-            : "CheckList: {$tipoObj->ZCK_DESCRI} - Filial: {$filial}";
-        
-        $this->form->setFormTitle($titulo);
         $this->form->setColumnClasses(2, ['col-sm-8', 'col-sm-4']);
 
-        // Campos hidden
-        $hidden_filial = new THidden('filial');
-        $hidden_tipo = new THidden('tipo');
-        $this->form->addFields([$hidden_filial, $hidden_tipo]);
-        $this->form->setData((object)['filial' => $filial, 'tipo' => $tipo]);
+        $titulo = $readonly
+            ? "Visualização: {$tipoObj->ZCK_DESCRI} - " . $this->formatarData($view_data['data']) . ' ' . $this->formatarHora($view_data['hora'])
+            : "CheckList: {$tipoObj->ZCK_DESCRI}";
 
-        // Opções do combo
+        $this->form->setFormTitle($titulo);
+
+        // Hidden
+        $this->form->addFields([new THidden('tipo')]);
+        $this->form->setData((object)['tipo' => $tipo]);
+
         $opcoes = [
             'C'  => 'Conforme',
             'NC' => 'Não Conforme',
             'OP' => 'Oportunidade de melhoria',
             'P'  => 'Parcialmente',
-            'N'  => 'Não Aplicável'
+            'NV' => 'Não visto'
         ];
 
-        // Renderiza perguntas
         foreach ($perguntas as $p) {
             $etapa = $p->ZCJ_ETAPA;
             $desc  = $p->ZCJ_DESCRI;
@@ -170,10 +110,7 @@ class checkListForm extends TPage
             $combo = new TCombo("resposta_{$etapa}");
             $combo->addItems($opcoes);
             $combo->setSize('100%');
-            
-            // Define valor (salvo ou padrão)
-            $valor = $respostas_salvas[$etapa] ?? 'C';
-            $combo->setValue($valor);
+            $combo->setValue($respostas_salvas[$etapa] ?? 'C');
 
             if ($readonly) {
                 $combo->setEditable(false);
@@ -185,7 +122,6 @@ class checkListForm extends TPage
             );
         }
 
-        // Botão salvar (apenas se não for readonly)
         if (!$readonly) {
             $btn = new TButton('salvar');
             $btn->setLabel('Finalizar Auditoria');
@@ -197,114 +133,79 @@ class checkListForm extends TPage
         parent::add($this->form);
     }
 
-    /**
-     * Salva auditoria completa
-     */
     public static function onSave($param)
     {
         try {
-            $filial = $param['filial'] ?? null;
-            $tipo   = $param['tipo'] ?? null;
-
-            if (!$filial || !$tipo) {
-                throw new Exception('Dados inválidos.');
-            }
+            $tipo = $param['tipo'] ?? null;
+            if (!$tipo) throw new Exception('Tipo não informado.');
 
             TTransaction::open('auditoria');
 
-            // === 1. CRIA CABEÇALHO (ZCK010) ===
-            $zck = new ZCK010;
-            
-            // Gera número do documento
-            $conn = TTransaction::get();
-            $result = $conn->query("
-                SELECT MAX(CAST(ZCK_DOC AS INT)) AS max_doc 
-                FROM ZCK010 
-                WHERE ZCK_FILIAL = '{$filial}' 
-                  AND ISNUMERIC(ZCK_DOC) = 1
-            ");
-            $row = $result->fetch(PDO::FETCH_ASSOC);
-            $max_doc = $row['max_doc'] ?? 0;
-            $novo_doc = str_pad($max_doc + 1, 6, '0', STR_PAD_LEFT);
+            $perguntas = ZCJ010::where('ZCJ_ETAPA', '=', $tipo)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->load();
 
-            $zck->ZCK_FILIAL = $filial;
-            $zck->ZCK_TIPO   = $tipo;
-            $zck->ZCK_DOC    = $novo_doc;
-            $zck->ZCK_DATA   = date('Ymd');
-            $zck->ZCK_HORA   = date('His');
-            $zck->ZCK_USUGIR = TSession::getValue('userid') ?? 'SYSTEM';
-            
-            // Busca descrição do tipo
-            $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-                             ->where('D_E_L_E_T_', '<>', '*')
-                             ->first();
-            $zck->ZCK_DESCRI = $tipoObj ? $tipoObj->ZCK_DESCRI : 'N/A';
-            
-            $zck->store();
+            $data    = date('Ymd');
+            $hora    = date('His');
+            $usuario = TSession::getValue('userid') ?? 'SYSTEM';
 
-            // === 2. SALVA RESPOSTAS (ZCN010) ===
-            $perguntas = ZCJ010::where('ZCJ_DESCRI', '=', $tipo)
-                               ->where('D_E_L_E_T_', '<>', '*')
-                               ->load();
-
-            $total_perguntas = 0;
-            $total_respondido = 0;
+            $salvo = false;
 
             foreach ($perguntas as $p) {
                 $etapa = $p->ZCJ_ETAPA;
                 $resposta = $param["resposta_{$etapa}"] ?? null;
 
                 if ($resposta) {
-                    $zcn = new ZCN010;
-                    $zcn->ZCN_FILIAL = $filial;
-                    $zcn->ZCN_DOC    = $novo_doc;
-                    $zcn->ZCN_ETAPA  = $etapa;
-                    $zcn->ZCN_NAOCO  = $resposta;
-                    $zcn->ZCN_DATA   = date('Ymd');
-                    $zcn->ZCN_HORA   = date('His');
-                    $zcn->ZCN_SCORE  = ($resposta === 'C') ? 100 : 0; // Simplificado
-                    $zcn->store();
+                    $zcl = new ZCL010;
 
-                    $total_perguntas++;
-                    if ($resposta !== 'N') {
-                        $total_respondido++;
-                    }
+                    // 🔹 AQUI ESTÁ A MUDANÇA:
+                    // Em vez de salvar separados, juntamos o tipo e a etapa
+                    $zcl->ZCL_TIPO     = $tipo . $etapa;  // Ex: "INT01"
+                    $zcl->ZCL_ETAPA    = $etapa;
+                    $zcl->ZCL_RESPOSTA = $resposta;
+                    $zcl->ZCL_DATA     = $data;
+                    $zcl->ZCL_HORA     = $hora;
+                    $zcl->ZCL_USUARIO  = $usuario;
+                    $zcl->store();
+
+                    $salvo = true;
                 }
             }
 
             TTransaction::close();
 
-            if ($total_perguntas === 0) {
-                throw new Exception('Nenhuma resposta foi selecionada.');
-            }
+            if (!$salvo) throw new Exception('Nenhuma resposta selecionada.');
 
-            new TMessage('info', "Auditoria finalizada com sucesso!<br>Documento: {$novo_doc}");
+            new TMessage('info', 'Auditoria finalizada com sucesso!');
 
-            // Fecha modal e recarrega lista
             TScript::create("
-                setTimeout(() => {
-                    Adianti.currentWindow?.close();
-                    __adianti_load_page('index.php?class=HistoricoList');
-                }, 2000);
-            ");
-
+            setTimeout(() => {
+                Adianti.currentWindow?.close();
+                __adianti_load_page('index.php?class=HistoricoList');
+            }, 1500);
+        ");
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
     }
 
-    /**
-     * Abre em modal
-     */
+
+    private function formatarData($d)
+    {
+        return strlen($d) == 8 ? substr($d, 6, 2) . '/' . substr($d, 4, 2) . '/' . substr($d, 0, 4) : $d;
+    }
+    private function formatarHora($h)
+    {
+        return strlen($h) == 6 ? substr($h, 0, 2) . ':' . substr($h, 2, 2) . ':' . substr($h, 4, 2) : $h;
+    }
+
     public static function onOpenCurtain($param)
     {
         $win = TWindow::create('CheckList de Auditoria', 0.9, 0.9);
         $win->removePadding();
-
         $page = new self();
         $page->onStart($param);
-
         $win->add($page);
         $win->setIsWrapped(true);
         $win->show();
