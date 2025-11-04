@@ -8,7 +8,6 @@ use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
 use Adianti\Widget\Container\TVBox;
 use Adianti\Control\TAction;
-use Adianti\Database\TRepository;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Base\TScript;
 use Adianti\Registry\TSession;
@@ -27,13 +26,13 @@ class inicioAuditoriaModal extends TPage
 
         // === CARREGA FILIAIS ===
         $filiais = $this->carregarFiliais();
-        $filial = new TCombo('ZCK_FILIAL');
+        $filial = new TCombo('filial');
         $filial->addItems($filiais);
         $filial->setSize('70%');
         $filial->setDefaultOption('Selecione a filial...');
 
-        // === CARREGA TIPOS ===
-        $tipo = new TDBCombo('zck010', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_DESCRI');
+        // === CARREGA TIPOS (ZCK_TIPO como chave) ===
+        $tipo = new TDBCombo('tipo', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_DESCRI');
         $tipo->setSize('70%');
         $tipo->setDefaultOption('Selecione o tipo...');
 
@@ -58,7 +57,7 @@ class inicioAuditoriaModal extends TPage
     }
 
     /**
-     * Carrega filiais únicas do ZCK010
+     * Carrega filiais distintas da tabela ZCK010
      */
     private function carregarFiliais()
     {
@@ -67,21 +66,20 @@ class inicioAuditoriaModal extends TPage
             $conn = TTransaction::get();
 
             $sql = "
-                SELECT DISTINCT ZCK_FILIAL, ZCK_DESCRI
+                SELECT DISTINCT ZCK_FILIAL
                 FROM ZCK010
                 WHERE D_E_L_E_T_ <> '*'
                   AND ZCK_FILIAL IS NOT NULL
-                  AND ZCK_DESCRI IS NOT NULL
-                ORDER BY ZCK_DESCRI
+                  AND LTRIM(RTRIM(ZCK_FILIAL)) <> ''
+                ORDER BY ZCK_FILIAL
             ";
 
             $result = $conn->query($sql);
             $items = [];
             foreach ($result as $row) {
                 $cod = trim($row['ZCK_FILIAL']);
-                $nome = trim($row['ZCK_DESCRI']);
-                if ($cod && $nome) {
-                    $items[$cod] = $nome;
+                if ($cod) {
+                    $items[$cod] = $cod;
                 }
             }
 
@@ -98,52 +96,37 @@ class inicioAuditoriaModal extends TPage
     }
 
     /**
-     * Ação do botão confirmar
+     * Apenas valida e redireciona para o CheckList (SEM CRIAR NADA NO ZCK010)
      */
     public static function onConfirmar($param)
     {
         try {
-            $data = $param;
-
             // Validações
-            if (empty($data['ZCK_FILIAL'])) {
+            if (empty($param['filial'])) {
                 throw new Exception('Selecione a filial.');
             }
-            if (empty($data['ZCK_DESCRI'])) {
+            if (empty($param['tipo'])) {
                 throw new Exception('Selecione o tipo de auditoria.');
             }
 
             TTransaction::open('auditoria');
 
-            // === GERA NÚMERO DA AUDITORIA (ZCK_DOC) ===
-            $ano = date('Y');
-            $seq = ZCK010::where('ZCK_TIPO', 'LIKE', $ano . '%')
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->count();
-            $seq = str_pad($seq + 1, 4, '0', STR_PAD_LEFT);
-            $doc = $ano . $seq;
-
-            // === CRIA AUDITORIA ===
-            $auditoria = new ZCK010;
-            $auditoria->ZCK_FILIAL = $data['ZCK_FILIAL'];
-            $auditoria->ZCK_TIPO   = $data['ZCK_DESCRI']; // Usa tipo selecionado
-            $auditoria->ZCK_DESCRI = $data['ZCK_DESCRI']; // Nome do tipo
-            $auditoria->ZCK_DATA   = date('Ymd');
-            $auditoria->ZCK_HORA   = date('His');
-            $auditoria->ZCK_USUGIR = TSession::getValue('userid') ?? 'SYSTEM';
-            $auditoria->ZCK_OBS    = '';
-            $auditoria->store();
+            // Valida se o tipo existe
+            $tipoObj = ZCK010::find($param['tipo']);
+            if (!$tipoObj || $tipoObj->D_E_L_E_T_ === '*') {
+                throw new Exception('Tipo de auditoria não encontrado.');
+            }
 
             TTransaction::close();
 
-            // === ABRE CHECKLIST ===
-            TScript::create("
-                setTimeout(function() {
-                    __adianti_load_page('index.php?class=CheckListForm&method=onOpenCurtain&filial={$data['ZCK_FILIAL']}&tipo={$data['ZCK_DESCRI']}&doc={$doc}');
-                }, 800);
-            ");
+            // Salva na sessão para uso no CheckList
+            TSession::setValue('auditoria_filial', $param['filial']);
+            TSession::setValue('auditoria_tipo', $param['tipo']);
 
-            new TMessage('info', "Auditoria {$doc} iniciada com sucesso!");
+            // Redireciona para o CheckList
+            TScript::create("
+                __adianti_load_page('index.php?class=checkListForm&method=onStart&filial={$param['filial']}&tipo={$param['tipo']}');
+            ");
 
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();

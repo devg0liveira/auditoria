@@ -1,296 +1,211 @@
 <?php
 
-/*
-use Adianti\Control\TAction;
-use Adianti\Control\TPage;
-use Adianti\Database\TTransaction;
-use Adianti\Database\TRepository;
-use Adianti\Database\TCriteria;
-use Adianti\Widget\Container\TPanelGroup;
-use Adianti\Widget\Datagrid\TDataGrid;
-use Adianti\Widget\Datagrid\TDataGridColumn;
-use Adianti\Widget\Datagrid\TDataGridAction;
-use Adianti\Widget\Dialog\TMessage;
-use Adianti\Wrapper\BootstrapDatagridWrapper;
-
-class Datagrid extends TPage
-{
-    private $datagrid;
-
-    public function __construct()
-    {
-        parent::__construct();
-
-        // ✅ Usa o BootstrapDatagridWrapper para o layout visual moderno
-        $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
-
-        // Define as colunas
-        $col_id     = new TDataGridColumn('id', 'ID', 'center', '10%');
-        $col_filial = new TDataGridColumn('filial', 'Filial', 'left', '30%');
-        $col_tipo   = new TDataGridColumn('tipo', 'Tipo', 'left', '30%');
-        $col_data   = new TDataGridColumn('data_atualizacao', 'Atualizado em', 'center', '30%');
-
-        // Adiciona colunas ao grid
-        $this->datagrid->addColumn($col_id);
-        $this->datagrid->addColumn($col_filial);
-        $this->datagrid->addColumn($col_tipo);
-        $this->datagrid->addColumn($col_data);
-
-        // ✅ Cria ações (botões)
-        $action_edit = new TDataGridAction(['Etapa1Form', 'onEdit'], ['id' => '{id}']);
-        $action_edit->setLabel('Editar');
-        $action_edit->setImage('fa:edit blue');
-
-        $action_new = new TDataGridAction(['CheckListForm', 'onStart']); // ou onClear
-        $action_new->setLabel('Novo');
-        $action_new->setImage('fa:plus-circle green');
-
-        // Adiciona as ações ao datagrid (sem duplicar!)
-        $this->datagrid->addAction($action_new);
-        $this->datagrid->addAction($action_edit);
-
-        // Remova esta linha duplicada:
-        // $this->datagrid->addAction($action_edit);
-
-        // ✅ Adiciona a ação diretamente ao DataGrid (não existe addActionColumn)
-        $this->datagrid->addAction($action_edit);
-
-        // ✅ Cria o modelo da grid (estrutura visual)
-        $this->datagrid->createModel();
-
-        // ✅ Painel
-        $panel = new TPanelGroup('Histórico de Avaliações');
-        $panel->add($this->datagrid);
-
-
-        parent::add($panel);
-    }
-
-    
-     * Método chamado automaticamente ao abrir a página
-     */
-/*  public function onReload()
-    {
-        try {
-            TTransaction::open('auditoria'); // nome do auditoria em databases.ini
-
-            $repository = new TRepository('Historico');
-            $criteria   = new TCriteria;
-            $criteria->setProperty('order', 'id desc'); // ordenar por id desc
-
-            $registros = $repository->load($criteria);
-
-            $this->datagrid->clear();
-
-            if ($registros) {
-                foreach ($registros as $item) {
-                    $this->datagrid->addItem($item);
-                }
-            }
-
-            TTransaction::close();
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-            TTransaction::rollback();
-        }
-    }
-
-    /**
-     * Método padrão que chama onReload()
-     
-    public function show()
-    {
-        $this->onReload();
-        parent::show();
-    }
-}
-*/
-
-
-// app/control/HistoricoList.php
-
-use Adianti\Control\TAction;
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
-use Adianti\Widget\Container\TPanelGroup;
-use Adianti\Widget\Datagrid\TDataGrid;
-use Adianti\Widget\Datagrid\TDataGridColumn;
-use Adianti\Widget\Datagrid\TDataGridAction;
-use Adianti\Widget\Dialog\TMessage;
-use Adianti\Widget\Form\TButton;
-use Adianti\Wrapper\BootstrapDatagridWrapper;
 use Adianti\Database\TTransaction;
-use Adianti\Database\TRepository;
-use Adianti\Database\TCriteria;
 use Adianti\Registry\TSession;
-use Adianti\Database\TFilter;
+use Adianti\Widget\Dialog\TMessage;
+use Adianti\Wrapper\BootstrapFormBuilder;
+use Adianti\Widget\Form\TLabel;
+use Adianti\Widget\Form\TRadioGroup;
+use Adianti\Widget\Form\TText;
+use Adianti\Widget\Form\TButton;
+use Adianti\Widget\Container\TVBox;
+use Adianti\Widget\Base\TScript;
 
-class HistoricoList extends TPage
+class CheckListForm extends TPage
 {
-    protected $datagrid;
+    protected $form;
+    protected $perguntas = [];
 
+    /**
+     * Construtor
+     */
     public function __construct()
     {
         parent::__construct();
 
-        $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid());
+        $this->form = new BootstrapFormBuilder('form_checklist');
+        $this->form->setFormTitle('CheckList de Auditoria');
 
-        // === COLUNAS ===
-        $col_id     = new TDataGridColumn('R_E_C_N_O_', 'ID', 'center', '8%');
-        $col_doc    = new TDataGridColumn('ZCK_DOC', 'Nº Auditoria', 'center', '12%');
-        $col_filial = new TDataGridColumn('ZCK_FILIAL', 'Filial', 'center', '10%');
-        $col_tipo   = new TDataGridColumn('ZCK_DESCRI', 'Tipo', 'left', '25%');
-        $col_data   = new TDataGridColumn('ZCK_DATA', 'Data', 'center', '15%');
-        $col_hora   = new TDataGridColumn('ZCK_HORA', 'Hora', 'center', '10%');
-        $col_user   = new TDataGridColumn('ZCK_USUGIR', 'Usuário', 'left', '15%');
-        $col_score  = new TDataGridColumn('score_total', 'Score %', 'center', '10%');
-
-        // Formata data no grid
-        $col_data->setTransformer([$this, 'formatarData']);
-        $col_hora->setTransformer(function($hora) {
-            return substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2);
-        });
-
-        $this->datagrid->addColumn($col_id);
-        $this->datagrid->addColumn($col_doc);
-        $this->datagrid->addColumn($col_filial);
-        $this->datagrid->addColumn($col_tipo);
-        $this->datagrid->addColumn($col_data);
-        $this->datagrid->addColumn($col_hora);
-        $this->datagrid->addColumn($col_user);
-        $this->datagrid->addColumn($col_score);
-
-        // === AÇÃO VER ===
-        $action_view = new TDataGridAction([__CLASS__, 'onViewStatic'], ['key' => '{R_E_C_N_O_}']);
-        $action_view->setLabel('Ver');
-        $action_view->setImage('fa:eye blue');
-        $this->datagrid->addAction($action_view);
-
-        $this->datagrid->createModel();
-
-        // === PAINEL ===
-        $panel = TPanelGroup::pack('Histórico de Auditorias', $this->datagrid);
-
-        // Botão Nova Auditoria
-        $panel->addHeaderActionLink(
-            'Nova Auditoria',
-            new TAction(['inicioAuditoriaModal', 'onOpenCurtain']),
-            'fa:plus-circle green'
-        );
-
-        parent::add($panel);
+        parent::add($this->form);
     }
 
     /**
-     * Carrega dados da lista
+     * Inicia uma nova auditoria e carrega perguntas
      */
-    public function onReload()
-{
-    try {
-        TTransaction::open('auditoria');
-
-        $repository = new TRepository('ZCK010');
-        $criteria = new TCriteria();
-        $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
-
-        // MUDANÇA AQUI: ordenar do mais antigo para o mais recente
-        $criteria->setProperty('order', 'ZCK_DATA ASC, ZCK_HORA ASC');
-
-        $auditorias = $repository->load($criteria);
-        $this->datagrid->clear();
-
-        if ($auditorias) {
-            foreach ($auditorias as $auditoria) {
-                $auditoria->ZCK_DESCRI = $auditoria->ZCK_DESCRI ?: 'N/A';
-
-                $auditoria->score_total = number_format(
-                    $this->calcularScoreTotal($auditoria->ZCK_FILIAL, $auditoria->ZCK_DOC),
-                    1
-                ) . '%';
-
-                $this->datagrid->addItem($auditoria);
-            }
-        }
-
-        TTransaction::close();
-    } catch (Exception $e) {
-        new TMessage('error', $e->getMessage());
-        TTransaction::rollback();
-    }
-}
-
-    /**
-     * Calcula o score total de uma auditoria
-     */
-    private function calcularScoreTotal($filial, $doc)
+    public function onStart($param)
     {
         try {
+            $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
+            $tipo = $param['tipo'] ?? TSession::getValue('auditoria_tipo');
+
+            if (!$filial || !$tipo) {
+                throw new Exception('Filial e tipo de auditoria são obrigatórios.');
+            }
+
             TTransaction::open('auditoria');
 
-            // Verifique se ZCN010 e ZCL010 mudaram para ZCKxxx
-            $respostas = ZCN010::where('ZCN_FILIAL', '=', $filial)
-                ->where('ZCN_DOC', '=', $doc)
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->load();
+            // Busca dados do tipo
+            $tipoObj = ZCK010::find($tipo);
+            if (!$tipoObj) {
+                throw new Exception('Tipo de auditoria não encontrado.');
+            }
 
-            $total_score = 0;
-            if ($respostas) {
-                foreach ($respostas as $r) {
-                    if ($r->ZCN_NAOCO !== 'N') {
-                        $total_score += (float) $r->ZCN_SCORE;
-                    }
+            // Busca perguntas vinculadas ao tipo
+            $perguntas = ZCJ010::where('ZCJ_TIPO', '=', $tipo)
+                               ->where('D_E_L_E_T_', '<>', '*')
+                               ->orderBy('ZCJ_ETAPA')
+                               ->load();
+
+            if (!$perguntas || count($perguntas) === 0) {
+                throw new Exception('Nenhuma pergunta encontrada para este tipo de auditoria.');
+            }
+
+            TTransaction::close();
+
+            // Reconstrói o formulário com as perguntas
+            $this->form = new BootstrapFormBuilder('form_checklist');
+            $this->form->setFormTitle("CheckList: {$tipoObj->ZCK_DESCRI} - Filial: {$filial}");
+
+            // Campos hidden para passar dados
+            $hidden_filial = new \Adianti\Widget\Form\THidden('filial');
+            $hidden_tipo = new \Adianti\Widget\Form\THidden('tipo');
+            $this->form->addFields([$hidden_filial, $hidden_tipo]);
+
+            // Renderiza cada pergunta
+            foreach ($perguntas as $pergunta) {
+                $this->renderPergunta($pergunta);
+            }
+
+            // Botão salvar
+            $btn_salvar = new TButton('btn_salvar');
+            $btn_salvar->setLabel('Finalizar Auditoria');
+            $btn_salvar->setImage('fa:check green');
+            $btn_salvar->setAction(new \Adianti\Control\TAction([$this, 'onSave']), 'Salvar');
+
+            $this->form->addFields([], [$btn_salvar]);
+
+            // Define dados iniciais
+            $data = new \stdClass;
+            $data->filial = $filial;
+            $data->tipo = $tipo;
+            $this->form->setData($data);
+
+            // Substitui o conteúdo da página
+            parent::add($this->form);
+
+        } catch (Exception $e) {
+            new TMessage('error', $e->getMessage());
+            if (TTransaction::get()) TTransaction::rollback();
+        }
+    }
+
+    /**
+     * Renderiza uma pergunta no formulário
+     */
+    private function renderPergunta($pergunta)
+    {
+        $etapa = $pergunta->ZCJ_ETAPA;
+        $desc = $pergunta->ZCJ_DESCRI;
+
+        // Campo de resposta (Sim/Não/N/A)
+        $resposta = new TRadioGroup("resposta_{$etapa}");
+        $resposta->addItems([
+            'S' => 'Sim',
+            'N' => 'Não',
+            'NA' => 'N/A'
+        ]);
+        $resposta->setLayout('horizontal');
+        $resposta->setUseButton();
+
+        // Campo de observação
+        $obs = new TText("obs_{$etapa}");
+        $obs->setSize('100%', 60);
+        $obs->placeholder = 'Observações (opcional)';
+
+        // Adiciona ao formulário
+        $this->form->addContent([new TLabel("<b>Etapa {$etapa}:</b> {$desc}", '', 14, 'b')]);
+        $this->form->addFields([new TLabel('Resposta:')], [$resposta]);
+        $this->form->addFields([new TLabel('Observação:')], [$obs]);
+        $this->form->addContent(['<hr>']);
+    }
+
+    /**
+     * Salva as respostas na tabela ZCL010
+     */
+    public static function onSave($param)
+    {
+        try {
+            $filial = $param['filial'] ?? null;
+            $tipo = $param['tipo'] ?? null;
+
+            if (!$filial || !$tipo) {
+                throw new Exception('Dados da auditoria não encontrados.');
+            }
+
+            TTransaction::open('auditoria');
+
+            // Busca perguntas do tipo
+            $perguntas = ZCJ010::where('ZCJ_TIPO', '=', $tipo)
+                               ->where('D_E_L_E_T_', '<>', '*')
+                               ->load();
+
+            $salvou_alguma = false;
+
+            foreach ($perguntas as $pergunta) {
+                $etapa = $pergunta->ZCJ_ETAPA;
+                $resposta = $param["resposta_{$etapa}"] ?? null;
+
+                // Só salva se tiver resposta
+                if ($resposta) {
+                    $zcl = new ZCL010;
+                    $zcl->ZCL_FILIAL = $filial;
+                    $zcl->ZCL_TIPO   = $tipo;
+                    $zcl->ZCL_ETAPA  = $etapa;
+                    $zcl->ZCL_RESPOSTA = $resposta;
+                    $zcl->ZCL_OBS    = $param["obs_{$etapa}"] ?? '';
+                    $zcl->ZCL_DATA   = date('Ymd');
+                    $zcl->ZCL_HORA   = date('His');
+                    $zcl->ZCL_USUARIO = TSession::getValue('userid') ?? 'SYSTEM';
+                    $zcl->store();
+
+                    $salvou_alguma = true;
                 }
             }
 
-            $total_peso = ZCL010::where('ZCL_FILIAL', '=', $filial)
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->sumBy('ZCL_SCORE');
-
             TTransaction::close();
 
-            return $total_peso > 0 ? ($total_score / $total_peso) * 100 : 0;
-        } catch (Exception $e) {
-            TTransaction::rollback();
-            return 0;
-        }
-    }
-
-    /**
-     * Formata data AAAAMMDD → DD/MM/AAAA
-     */
-    public function formatarData($data)
-    {
-        if (strlen($data) == 8 && is_numeric($data)) {
-            return substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4);
-        }
-        return $data;
-    }
-
-    /**
-     * Visualiza auditoria
-     */
-    public static function onViewStatic($param)
-    {
-        try {
-            $key = $param['key'] ?? null;
-            if (!$key) throw new Exception('ID não informado.');
-
-            TTransaction::open('auditoria');
-            $auditoria = ZCK010::find($key);  // MODELO CORRETO
-            TTransaction::close();
-
-            if (!$auditoria || $auditoria->D_E_L_E_T_ === '*') {
-                throw new Exception('Auditoria não encontrada.');
+            if (!$salvou_alguma) {
+                throw new Exception('Nenhuma resposta foi preenchida.');
             }
 
-            $page = TWindow::create('Visualizar Auditoria', 0.8, 0.8);
+            new TMessage('info', 'Auditoria finalizada com sucesso!');
+
+            // Fecha a janela modal
+            TScript::create("
+                setTimeout(function() {
+                    Adianti.currentWindow.close();
+                }, 1500);
+            ");
+
+        } catch (Exception $e) {
+            if (TTransaction::get()) TTransaction::rollback();
+            new TMessage('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Abre o CheckListForm em janela modal
+     */
+    public static function onOpenCurtain($param)
+    {
+        try {
+            $page = TWindow::create('CheckList de Auditoria', 0.9, 0.9);
             $page->removePadding();
 
-            TSession::setValue('auditoria_key', $key);
-            TSession::setValue('view_mode', true);
-
-            $embed = new CheckListForm();
-            $embed->onEdit(['key' => $key]);  // Passa o R_E_C_N_O_
+            $embed = new self();
+            $embed->onStart($param);
 
             $page->add($embed);
             $page->setIsWrapped(true);
@@ -299,11 +214,5 @@ class HistoricoList extends TPage
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }
-    }
-
-    public function show()
-    {
-        $this->onReload();
-        parent::show();
     }
 }
