@@ -20,7 +20,7 @@ class ZCL010 extends TRecord
         parent::addAttribute('ZCL_DATA');
         parent::addAttribute('ZCL_HORA');
         parent::addAttribute('D_E_L_E_T_');
-        PARENT::addAttribute('R_E_C_N_O');
+        PARENT::addAttribute('R_E_C_N_O_');
         parent::addAttribute('R_E_C_D_E_L_');
     }
 }

@@ -2,6 +2,9 @@
 
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
+use Adianti\Database\TCriteria;
+use Adianti\Database\TFilter;
+use Adianti\Database\TRepository;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
 use Adianti\Widget\Dialog\TMessage;
@@ -37,7 +40,7 @@ class checkListForm extends TPage
 
             TTransaction::open('auditoria');
 
-            // === BUSCA TIPO (ZCK010) ===
+            // === BUSCA O TIPO (ZCK010) ===
             $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->first();
@@ -45,19 +48,31 @@ class checkListForm extends TPage
                 throw new Exception('Tipo não encontrado.');
             }
 
-            // === BUSCA PERGUNTAS (ZCJ010) ===
-            $perguntas = ZCJ010::where('D_E_L_E_T_', '<>', '*')
-                ->orderBy('ZCJ_ETAPA')
-                ->load();
+            // === BUSCA AS ETAPAS QUE PERTENCEM AO TIPO NA ZCL010 ===
+            $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
 
+            if (empty($etapas_tipo)) {
+                throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo} encontrada em ZCL010.");
+            }
+
+            // === BUSCA AS PERGUNTAS (ZCJ010) SOMENTE DAS ETAPAS VINCULADAS ===
+            $criteria = new TCriteria;
+            $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
+            $criteria->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($etapas_tipo)));
+            $criteria->setProperty('order', 'ZCJ_ETAPA');
+
+            $repo = new TRepository('ZCJ010');
+            $perguntas = $repo->load($criteria);
 
             if (empty($perguntas)) {
-                throw new Exception('Nenhuma pergunta cadastrada para este tipo.');
+                throw new Exception("Nenhuma pergunta encontrada para o tipo {$tipo}.");
             }
 
             $respostas_salvas = [];
 
-            // === MODO VISUALIZAÇÃO ===
+            // === SE ESTIVER EM MODO DE VISUALIZAÇÃO ===
             if ($view_mode && $view_data) {
                 $respostas = ZCL010::where('ZCL_TIPO', '=', $tipo)
                     ->where('ZCL_DATA', '=', $view_data['data'])
@@ -73,12 +88,14 @@ class checkListForm extends TPage
 
             TTransaction::close();
 
+            // === MONTA O FORMULÁRIO ===
             $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $view_mode, $view_data);
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
             if (TTransaction::get()) TTransaction::rollback();
         }
     }
+
 
     private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $readonly = false, $view_data = null)
     {
@@ -141,8 +158,19 @@ class checkListForm extends TPage
 
             TTransaction::open('auditoria');
 
-            $perguntas = ZCJ010::where('ZCJ_ETAPA', '=', $tipo)
+            // === BUSCA AS ETAPAS VINCULADAS AO TIPO NA ZCL010 ===
+            $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
+                ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
+
+            if (empty($etapas_tipo)) {
+                throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo} encontrada em ZCL010.");
+            }
+
+            // === BUSCA AS PERGUNTAS CORRESPONDENTES ===
+            $perguntas = ZCJ010::where('D_E_L_E_T_', '<>', '*')
+                ->whereIn('ZCJ_ETAPA', array_keys($etapas_tipo))
+                ->orderBy('ZCJ_ETAPA')
                 ->load();
 
             $data    = date('Ymd');
@@ -157,10 +185,7 @@ class checkListForm extends TPage
 
                 if ($resposta) {
                     $zcl = new ZCL010;
-
-                    // 🔹 AQUI ESTÁ A MUDANÇA:
-                    // Em vez de salvar separados, juntamos o tipo e a etapa
-                    $zcl->ZCL_TIPO     = $tipo . $etapa;  // Ex: "INT01"
+                    $zcl->ZCL_TIPO     = $tipo . $etapa;  // junção do tipo + etapa
                     $zcl->ZCL_ETAPA    = $etapa;
                     $zcl->ZCL_RESPOSTA = $resposta;
                     $zcl->ZCL_DATA     = $data;
@@ -178,6 +203,7 @@ class checkListForm extends TPage
 
             new TMessage('info', 'Auditoria finalizada com sucesso!');
 
+            // Fecha a janela e volta para o histórico
             TScript::create("
             setTimeout(() => {
                 Adianti.currentWindow?.close();
@@ -189,6 +215,7 @@ class checkListForm extends TPage
             new TMessage('error', $e->getMessage());
         }
     }
+
 
 
     private function formatarData($d)
