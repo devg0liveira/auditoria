@@ -1,116 +1,5 @@
 <?php
 
-/*
-use Adianti\Control\TAction;
-use Adianti\Control\TPage;
-use Adianti\Database\TTransaction;
-use Adianti\Database\TRepository;
-use Adianti\Database\TCriteria;
-use Adianti\Widget\Container\TPanelGroup;
-use Adianti\Widget\Datagrid\TDataGrid;
-use Adianti\Widget\Datagrid\TDataGridColumn;
-use Adianti\Widget\Datagrid\TDataGridAction;
-use Adianti\Widget\Dialog\TMessage;
-use Adianti\Wrapper\BootstrapDatagridWrapper;
-
-class Datagrid extends TPage
-{
-    private $datagrid;
-
-    public function __construct()
-    {
-        parent::__construct();
-
-        // ✅ Usa o BootstrapDatagridWrapper para o layout visual moderno
-        $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
-
-        // Define as colunas
-        $col_id     = new TDataGridColumn('id', 'ID', 'center', '10%');
-        $col_filial = new TDataGridColumn('filial', 'Filial', 'left', '30%');
-        $col_tipo   = new TDataGridColumn('tipo', 'Tipo', 'left', '30%');
-        $col_data   = new TDataGridColumn('data_atualizacao', 'Atualizado em', 'center', '30%');
-
-        // Adiciona colunas ao grid
-        $this->datagrid->addColumn($col_id);
-        $this->datagrid->addColumn($col_filial);
-        $this->datagrid->addColumn($col_tipo);
-        $this->datagrid->addColumn($col_data);
-
-        // ✅ Cria ações (botões)
-        $action_edit = new TDataGridAction(['Etapa1Form', 'onEdit'], ['id' => '{id}']);
-        $action_edit->setLabel('Editar');
-        $action_edit->setImage('fa:edit blue');
-
-        $action_new = new TDataGridAction(['CheckListForm', 'onStart']); // ou onClear
-        $action_new->setLabel('Novo');
-        $action_new->setImage('fa:plus-circle green');
-
-        // Adiciona as ações ao datagrid (sem duplicar!)
-        $this->datagrid->addAction($action_new);
-        $this->datagrid->addAction($action_edit);
-
-        // Remova esta linha duplicada:
-        // $this->datagrid->addAction($action_edit);
-
-        // ✅ Adiciona a ação diretamente ao DataGrid (não existe addActionColumn)
-        $this->datagrid->addAction($action_edit);
-
-        // ✅ Cria o modelo da grid (estrutura visual)
-        $this->datagrid->createModel();
-
-        // ✅ Painel
-        $panel = new TPanelGroup('Histórico de Avaliações');
-        $panel->add($this->datagrid);
-
-
-        parent::add($panel);
-    }
-
-    
-     * Método chamado automaticamente ao abrir a página
-     */
-/*  public function onReload()
-    {
-        try {
-            TTransaction::open('auditoria'); // nome do auditoria em databases.ini
-
-            $repository = new TRepository('Historico');
-            $criteria   = new TCriteria;
-            $criteria->setProperty('order', 'id desc'); // ordenar por id desc
-
-            $registros = $repository->load($criteria);
-
-            $this->datagrid->clear();
-
-            if ($registros) {
-                foreach ($registros as $item) {
-                    $this->datagrid->addItem($item);
-                }
-            }
-
-            TTransaction::close();
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-            TTransaction::rollback();
-        }
-    }
-
-    /**
-     * Método padrão que chama onReload()
-     
-    public function show()
-    {
-        $this->onReload();
-        parent::show();
-    }
-}
-*/
-
-
-// app/control/HistoricoList.php
-
-
-
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
 use Adianti\Widget\Container\TPanelGroup;
@@ -119,10 +8,7 @@ use Adianti\Widget\Datagrid\TDataGridColumn;
 use Adianti\Widget\Datagrid\TDataGridAction;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Database\TTransaction;
-use Adianti\Database\TRepository;
-use Adianti\Database\TCriteria;
 use Adianti\Registry\TSession;
-use Adianti\Database\TFilter;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
 
 class HistoricoList extends TPage
@@ -136,30 +22,30 @@ class HistoricoList extends TPage
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
 
-        // === COLUNAS ===
-        $col_tipo     = new TDataGridColumn('tipo_descricao', 'Tipo', 'left', '30%');
-        $col_data     = new TDataGridColumn('data_hora', 'Data/Hora', 'center', '20%');
-        $col_usuario  = new TDataGridColumn('ZCL_USUARIO', 'Usuário', 'left', '20%');
-        $col_score    = new TDataGridColumn('score', 'Score %', 'center', '15%');
-        $col_respostas = new TDataGridColumn('total_respostas', 'Itens', 'center', '10%');
+        // === COLUNAS DO DATAGRID ===
+        $col_doc      = new TDataGridColumn('zcm_doc', 'Documento', 'center', '8%');
+        $col_filial   = new TDataGridColumn('zcm_filial', 'Filial', 'left', '15%');
+        $col_tipo     = new TDataGridColumn('zcm_tipo', 'Tipo', 'left', '20%');
+        $col_datahora = new TDataGridColumn('zcm_datahora', 'Data/Hora', 'center', '15%');
+        $col_usuario  = new TDataGridColumn('zcm_usuario', 'Usuário', 'left', '15%');
+        $col_score    = new TDataGridColumn('score', 'Score %', 'center', '10%');
+        $col_obs      = new TDataGridColumn('zcm_obs', 'Observações', 'left', '30%');
 
-        // Transformadores
-        $col_data->setTransformer([$this, 'formatarDataHora']);
+        // Formatadores
+        $col_datahora->setTransformer([$this, 'formatarDataHora']);
         $col_score->setTransformer(fn($v) => number_format($v, 1) . '%');
 
+        // Adiciona as colunas
+        $this->datagrid->addColumn($col_doc);
+        $this->datagrid->addColumn($col_filial);
         $this->datagrid->addColumn($col_tipo);
-        $this->datagrid->addColumn($col_data);
+        $this->datagrid->addColumn($col_datahora);
         $this->datagrid->addColumn($col_usuario);
-        $this->datagrid->addColumn($col_respostas);
         $this->datagrid->addColumn($col_score);
+        $this->datagrid->addColumn($col_obs);
 
         // === AÇÃO VER ===
-        $action_view = new TDataGridAction([$this, 'onView'], [
-            'tipo' => '{ZCL_TIPO}',
-            'data' => '{ZCL_DATA}',
-            'hora' => '{ZCL_HORA}',
-            'usuario' => '{ZCL_USUARIO}'
-        ]);
+        $action_view = new TDataGridAction([$this, 'onView'], ['zcm_doc' => '{zcm_doc}']);
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
@@ -178,46 +64,68 @@ class HistoricoList extends TPage
     }
 
     /**
-     * Carrega auditorias agrupadas por tipo + data/hora
+     * Carrega dados consolidados de ZCL010 e converte para formato ZCM010
      */
     public function onReload($param = null)
     {
         try {
             TTransaction::open('auditoria');
-
-            // Consulta agrupada por tipo + data + hora + usuário
             $conn = TTransaction::get();
+
+            // Agrupa auditorias finalizadas
             $sql = "
-                SELECT 
-                    ZCL_TIPO,
-                    ZCL_DATA,
-                    ZCL_HORA,
-                    ZCL_USUARIO,
-                    COUNT(*) AS total_respostas,
-                    SUM(CASE WHEN ZCL_RESPOSTA = 'C' THEN 1 ELSE 0 END) AS conformes
-                FROM ZCL010
-                WHERE D_E_L_E_T_ <> '*'
-                GROUP BY ZCL_TIPO, ZCL_DATA, ZCL_HORA, ZCL_USUARIO
-                ORDER BY ZCL_DATA DESC, ZCL_HORA DESC
-            ";
+           SELECT 
+           ZCM_FILIAL,
+        ZCM_TIPO,
+        ZCM_DATA,
+        ZCM_HORA,
+        ZCM_USUGIR,
+        COUNT(*) AS total_perguntas,
+        SUM(CASE WHEN ZCM_OBS IS NULL OR ZCM_OBS = '' THEN 1 ELSE 0 END) AS conformes,
+        STRING_AGG(
+            CASE 
+                WHEN ZCM_OBS IS NOT NULL AND ZCM_OBS <> ''
+                THEN ZCM_OBS
+                ELSE NULL 
+            END, 
+            '; '
+            )AS obs_nao_conformes
+              FROM ZCM010
+              WHERE D_E_L_E_T_ <> '*'
+               GROUP BY ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR
+             ORDER BY ZCM_DATA DESC, ZCM_HORA DESC
+";
+
 
             $result = $conn->query($sql);
             $this->datagrid->clear();
+            $contador = 1;
 
             foreach ($result as $row) {
-                $tipo = $row['ZCL_TIPO'];
-                $total = $row['total_respostas'];
+                $filial   = trim($row['ZCM_FILIAL']);
+                $tipo     = trim($row['ZCM_TIPO']);
+                $data     = $row['ZCM_DATA'];
+                $hora     = $row['ZCM_HORA'];
+                $usuario  = trim($row['ZCM_USUGIR']);
+                $total    = $row['total_perguntas'];
                 $conformes = $row['conformes'];
+                $score    = $total > 0 ? ($conformes / $total) * 100 : 0;
+                $observacoes = $row['obs_nao_conformes'] ?? '';
 
-                // Busca nome do tipo
-                $tipoObj = ZCK010::where('ZC_TIPO', '=', $tipo)
-                                 ->where('D_E_L_E_T_', '<>', '*')
-                                 ->first();
-                $row['tipo_descricao'] = $tipoObj ? trim($tipoObj->ZC_DESCRI) : 'N/D';
-                $row['data_hora'] = $row['ZCL_DATA'] . $row['ZCL_HORA'];
-                $row['score'] = $total > 0 ? ($conformes / $total) * 100 : 0;
+                $zcm_doc = str_pad($contador, 6, '0', STR_PAD_LEFT);
 
-                $this->datagrid->addItem((object)$row);
+                $item = (object)[
+                    'zcm_doc'      => $zcm_doc,
+                    'zcm_filial'   => $this->obterNomeFilial($filial),
+                    'zcm_tipo'     => $this->obterDescricaoTipo($tipo),
+                    'zcm_datahora' => $data . $hora,
+                    'zcm_usuario'  => $usuario,
+                    'score'        => $score,
+                    'zcm_obs'      => $observacoes
+                ];
+
+                $this->datagrid->addItem($item);
+                $contador++;
             }
 
             TTransaction::close();
@@ -227,12 +135,27 @@ class HistoricoList extends TPage
         }
     }
 
-    /**
-     * Formata data + hora
-     */
+    private function obterNomeFilial($codigo)
+    {
+        $map = [
+            '001' => 'Recife',
+            '002' => 'Jaboatão',
+            '003' => 'Cabo',
+        ];
+        return $map[$codigo] ?? "Filial {$codigo}";
+    }
+
+    private function obterDescricaoTipo($tipo)
+    {
+        $obj = ZCK010::where('ZCK_TIPO', '=', $tipo)
+            ->where('D_E_L_E_T_', '<>', '*')
+            ->first();
+        return $obj ? trim($obj->ZCK_DESCRI) : $tipo;
+    }
+
     public function formatarDataHora($value)
     {
-        if (strlen($value) == 14) {
+        if (strlen($value) >= 14) {
             $data = substr($value, 0, 8);
             $hora = substr($value, 8, 6);
             return $this->formatarData($data) . ' ' . $this->formatarHora($hora);
@@ -240,53 +163,26 @@ class HistoricoList extends TPage
         return $value;
     }
 
-    public function formatarData($data)
+    private function formatarData($data)
     {
-        return strlen($data) == 8 ? 
-            substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4) : 
-            $data;
+        return strlen($data) == 8 ? substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4) : $data;
     }
 
-    public function formatarHora($hora)
+    private function formatarHora($hora)
     {
-        return strlen($hora) == 6 ? 
-            substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : 
-            $hora;
+        return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
     }
 
-    /**
-     * Visualiza auditoria
-     */
     public function onView($param)
     {
         try {
-            $tipo = $param['tipo'] ?? null;
-            $data = $param['data'] ?? null;
-            $hora = $param['hora'] ?? null;
-            $usuario = $param['usuario'] ?? null;
-
-            if (!$tipo || !$data || !$hora) {
-                throw new Exception('Parâmetros inválidos.');
+            $doc = $param['zcm_doc'] ?? null;
+            if (!$doc) {
+                throw new Exception('Documento não informado.');
             }
 
-            TSession::setValue('view_auditoria', [
-                'tipo' => $tipo,
-                'data' => $data,
-                'hora' => $hora,
-                'usuario' => $usuario
-            ]);
-            TSession::setValue('view_mode', true);
-
-            $win = TWindow::create('Visualizar Auditoria', 0.9, 0.9);
-            $win->removePadding();
-
-            $form = new checkListForm();
-            $form->onStart(['tipo' => $tipo]); // só precisa do tipo
-
-            $win->add($form);
-            $win->setIsWrapped(true);
-            $win->show();
-
+            // aqui você pode abrir novamente a auditoria correspondente, como antes
+            new TMessage('info', "Abrir auditoria do documento {$doc}");
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }

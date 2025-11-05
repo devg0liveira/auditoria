@@ -120,9 +120,18 @@ class checkListForm extends TPage
             'NV' => 'Não visto'
         ];
 
+        TTransaction::open('auditoria');
+
+
         foreach ($perguntas as $p) {
             $etapa = $p->ZCJ_ETAPA;
             $desc  = $p->ZCJ_DESCRI;
+
+            // 🔹 Aqui você puxa o score da ZCL010 (onde ficam as etapas)
+            $etapa_info = ZCL010::where('ZCL_ETAPA', '=', $etapa)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->first();
+            $score = $etapa_info->ZCL_SCORE ?? 0;
 
             $combo = new TCombo("resposta_{$etapa}");
             $combo->addItems($opcoes);
@@ -133,11 +142,19 @@ class checkListForm extends TPage
                 $combo->setEditable(false);
             }
 
+            // 🔸 Cria o rótulo do score
+            $score_label = new TLabel("<b>Score:</b> {$score}");
+            $score_label->setFontColor('#666');
+
+            // 🔸 Adiciona ao formulário: pergunta + combo + score
             $this->form->addFields(
                 [new TLabel("<b>Etapa {$etapa}:</b> {$desc}")],
-                [$combo]
+                [$combo, $score_label]
             );
         }
+
+        TTransaction::close();
+
 
         if (!$readonly) {
             $btn = new TButton('salvar');
