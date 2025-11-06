@@ -1,4 +1,5 @@
 <?php
+
 use Adianti\Control\TPage;
 use Adianti\Widget\Form\TEntry;
 use Adianti\Widget\Form\TLabel;
@@ -19,7 +20,8 @@ class TipoForm extends TPage
         $this->form = new BootstrapFormBuilder('form_tipo');
         $this->form->setFormTitle('Cadastro de Tipo de Auditoria');
 
-        $tipo  = new TEntry('ZCK_TIPO');   $tipo->setEditable(false);
+        $tipo  = new TEntry('ZCK_TIPO');
+        $tipo->setEditable(false);
         $desc  = new TEntry('ZCK_DESCRI');
 
         $this->form->addFields([new TLabel('Código:')], [$tipo]);
@@ -43,40 +45,44 @@ class TipoForm extends TPage
         }
     }
 
-  public static function onSave($param)
-{
-    try {
-        if (empty($param['ZCK_DESCRI'])) {
-            throw new Exception('Descrição é obrigatória.');
+    public static function onSave($param)
+    {
+        try {
+            if (empty($param['ZCK_DESCRI'])) {
+                throw new Exception('Descrição é obrigatória.');
+            }
+
+            TTransaction::open('auditoria');
+
+            $obj = new ZCK010;
+            $obj->fromArray($param);
+
+            // Garante ZCK_TIPO com autoincremento (+1 do maior valor numérico existente)
+            if (!$obj->ZCK_TIPO) {
+                $conn = TTransaction::get();
+                $result = $conn->query("
+        SELECT MAX(CAST(ZCK_TIPO AS INT)) AS max_tipo 
+        FROM ZCK010 
+        WHERE ISNUMERIC(ZCK_TIPO) = 1
+    ");
+                $row = $result->fetch(PDO::FETCH_ASSOC);
+                $max = $row['max_tipo'] ?? 0;
+                $obj->ZCK_TIPO = str_pad($max + 1, 3, '0', STR_PAD_LEFT);
+            }
+
+            // Campos obrigatórios (sem ZCK_FILIAL)
+            $obj->ZCK_DATA   = date('Ymd');
+            $obj->ZCK_HORA   = date('Hi');
+            $obj->ZCK_USUGIR = 'SYSTEM';
+            $obj->ZCK_DOC    = 'CADTIPO';
+
+            $obj->store();
+
+            TTransaction::close();
+            new TMessage('info', 'Tipo cadastrado com sucesso!');
+        } catch (Exception $e) {
+            TTransaction::rollback();
+            new TMessage('error', $e->getMessage());
         }
-
-        TTransaction::open('auditoria');
-
-        $obj = new ZCK010;
-        $obj->fromArray($param);
-
-        // CORREÇÃO: max() com SQL direto
-        if (!$obj->ZCK_TIPO) {
-            $conn = TTransaction::get();
-            $result = $conn->query("SELECT MAX(CAST(ZCK_DESCRI AS INT)) AS max_tipo FROM ZCK010 WHERE ISNUMERIC(ZCK_dESCRI) = 1");
-            $row = $result->fetch(PDO::FETCH_ASSOC);
-            $max = $row['max_tipo'] ?? 0;
-            $obj->ZCK_TIPO = str_pad($max + 1, 3, '0', STR_PAD_LEFT);
-        }
-
-        $obj->ZCK_FILIAL = '000';
-        $obj->ZCK_DATA   = date('Ymd');
-        $obj->ZCK_HORA   = date('Hi');
-        $obj->ZCK_USUGIR = 'SYSTEM';
-        $obj->ZCK_DOC    = 'CADTIPO';
-        $obj->store();
-
-        TTransaction::close();
-        new TMessage('info', 'Tipo cadastrado com sucesso!');
-
-    } catch (Exception $e) {
-        TTransaction::rollback();
-        new TMessage('error', $e->getMessage());
     }
-}
 }

@@ -24,7 +24,8 @@ class checkListForm extends TPage
         parent::__construct();
         $this->form = new BootstrapFormBuilder('form_checklist');
         $this->form->setFormTitle('CheckList de Auditoria');
-        parent::add($this->form);
+
+       // parent::add($this->form);
     }
 
     public function onStart($param)
@@ -54,6 +55,7 @@ class checkListForm extends TPage
                 ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
 
             if (empty($etapas_tipo)) {
+                TTransaction::close();
                 throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo} encontrada em ZCL010.");
             }
 
@@ -66,9 +68,14 @@ class checkListForm extends TPage
             $repo = new TRepository('ZCJ010');
             $perguntas = $repo->load($criteria);
 
+            $perguntas = is_array($perguntas) ? $perguntas : [];
+
             if (empty($perguntas)) {
+                TTransaction::close();
                 throw new Exception("Nenhuma pergunta encontrada para o tipo {$tipo}.");
             }
+
+            TTransaction::close();
 
             $respostas_salvas = [];
 

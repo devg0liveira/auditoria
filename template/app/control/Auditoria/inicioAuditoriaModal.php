@@ -32,7 +32,7 @@ class inicioAuditoriaModal extends TPage
         $filial->setDefaultOption('Selecione a filial...');
 
         // === CARREGA TIPOS (ZCK_TIPO como chave) ===
-        $tipo = new TDBCombo('tipo', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_DESCRI');
+        $tipo = new TDBCombo('tipo', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_TIPO');
         $tipo->setSize('70%');
         $tipo->setDefaultOption('Selecione o tipo...');
 
@@ -54,6 +54,12 @@ class inicioAuditoriaModal extends TPage
         $container->style = 'width: 100%';
         $container->add($this->form);
         parent::add($container);
+    }
+
+     public function onLoad($param = null)
+    {
+        // Apenas renderiza a página
+        // O formulário já está montado no construtor
     }
 
     /**

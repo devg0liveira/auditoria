@@ -54,9 +54,11 @@ class HistoricoList extends TPage
 
         // === PAINEL ===
         $panel = TPanelGroup::pack('Histórico de Auditorias Finalizadas', $this->datagrid);
+        
+        // 🔹 CORREÇÃO: Mudando de modal para página comum
         $panel->addHeaderActionLink(
             'Nova Auditoria',
-            new \Adianti\Control\TAction(['inicioAuditoriaModal', 'onOpenCurtain']),
+            new \Adianti\Control\TAction(['inicioAuditoriaModal', 'onLoad']),
             'fa:plus-circle green'
         );
 
@@ -96,17 +98,16 @@ class HistoricoList extends TPage
              ORDER BY ZCM_DATA DESC, ZCM_HORA DESC
 ";
 
-
             $result = $conn->query($sql);
             $this->datagrid->clear();
             $contador = 1;
 
             foreach ($result as $row) {
-                $filial   = trim($row['ZCM_FILIAL']);
-                $tipo     = trim($row['ZCM_TIPO']);
-                $data     = $row['ZCM_DATA'];
-                $hora     = $row['ZCM_HORA'];
-                $usuario  = trim($row['ZCM_USUGIR']);
+                $tipo_completo = trim($row['ZCL_TIPO']);
+                $tipo     = substr($tipo_completo, 0, 3); // Extrai os 3 primeiros caracteres
+                $data     = $row['ZCL_DATA'];
+                $hora     = $row['ZCL_HORA'];
+                $usuario  = trim($row['ZCL_USUARIO']);
                 $total    = $row['total_perguntas'];
                 $conformes = $row['conformes'];
                 $score    = $total > 0 ? ($conformes / $total) * 100 : 0;
@@ -116,12 +117,15 @@ class HistoricoList extends TPage
 
                 $item = (object)[
                     'zcm_doc'      => $zcm_doc,
-                    'zcm_filial'   => $this->obterNomeFilial($filial),
+                    'zcm_filial'   => 'N/A', // Não temos mais filial no ZCL010
                     'zcm_tipo'     => $this->obterDescricaoTipo($tipo),
                     'zcm_datahora' => $data . $hora,
                     'zcm_usuario'  => $usuario,
                     'score'        => $score,
-                    'zcm_obs'      => $observacoes
+                    'zcm_obs'      => $observacoes,
+                    'tipo_cod'     => $tipo,
+                    'data'         => $data,
+                    'hora'         => $hora
                 ];
 
                 $this->datagrid->addItem($item);
@@ -135,22 +139,18 @@ class HistoricoList extends TPage
         }
     }
 
-    private function obterNomeFilial($codigo)
-    {
-        $map = [
-            '001' => 'Recife',
-            '002' => 'Jaboatão',
-            '003' => 'Cabo',
-        ];
-        return $map[$codigo] ?? "Filial {$codigo}";
-    }
-
     private function obterDescricaoTipo($tipo)
     {
-        $obj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-            ->where('D_E_L_E_T_', '<>', '*')
-            ->first();
-        return $obj ? trim($obj->ZCK_DESCRI) : $tipo;
+        try {
+            TTransaction::open('auditoria');
+            $obj = ZCK010::where('ZCK_TIPO', '=', $tipo)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->first();
+            TTransaction::close();
+            return $obj ? trim($obj->ZCK_DESCRI) : $tipo;
+        } catch (Exception $e) {
+            return $tipo;
+        }
     }
 
     public function formatarDataHora($value)
@@ -181,7 +181,7 @@ class HistoricoList extends TPage
                 throw new Exception('Documento não informado.');
             }
 
-            // aqui você pode abrir novamente a auditoria correspondente, como antes
+            // Aqui você pode abrir a visualização da auditoria
             new TMessage('info', "Abrir auditoria do documento {$doc}");
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
@@ -194,3 +194,9 @@ class HistoricoList extends TPage
         parent::show();
     }
 }
+
+
+
+
+
+
