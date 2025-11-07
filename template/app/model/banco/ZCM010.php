@@ -19,7 +19,7 @@ class ZCM010 extends TRecord
         parent::addAttribute('ZCM_OBS');
         parent::addAttribute('ZCM_USUGIR');
         parent::addAttribute('D_E_L_E_T_');
-        PARENT::addAttribute('R_E_C_N_O');
+        PARENT::addAttribute('R_E_C_N_O_');
         parent::addAttribute('R_E_C_D_E_L_');
     }
 }

@@ -1,7 +1,6 @@
 <?php
 
 use Adianti\Control\TPage;
-use Adianti\Control\TWindow;
 use Adianti\Widget\Container\TPanelGroup;
 use Adianti\Widget\Datagrid\TDataGrid;
 use Adianti\Widget\Datagrid\TDataGridColumn;
@@ -9,6 +8,7 @@ use Adianti\Widget\Datagrid\TDataGridAction;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
+use Adianti\Widget\Base\TScript;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
 
 class HistoricoList extends TPage
@@ -23,19 +23,18 @@ class HistoricoList extends TPage
         $this->datagrid->disableDefaultClick();
 
         // === COLUNAS DO DATAGRID ===
-        $col_doc      = new TDataGridColumn('zcm_doc', 'Documento', 'center', '8%');
-        $col_filial   = new TDataGridColumn('zcm_filial', 'Filial', 'left', '15%');
-        $col_tipo     = new TDataGridColumn('zcm_tipo', 'Tipo', 'left', '20%');
+        $col_doc      = new TDataGridColumn('zcm_doc', 'Documento', 'center', '10%');
+        $col_filial   = new TDataGridColumn('zcm_filial', 'Filial', 'left', '12%');
+        $col_tipo     = new TDataGridColumn('zcm_tipo', 'Tipo', 'left', '18%');
         $col_datahora = new TDataGridColumn('zcm_datahora', 'Data/Hora', 'center', '15%');
         $col_usuario  = new TDataGridColumn('zcm_usuario', 'Usuário', 'left', '15%');
-        $col_score    = new TDataGridColumn('score', 'Score %', 'center', '10%');
-        $col_obs      = new TDataGridColumn('zcm_obs', 'Observações', 'left', '30%');
+        $col_score    = new TDataGridColumn('score', 'Score', 'center', '10%'); // Sem %
+        $col_obs      = new TDataGridColumn('zcm_obs', 'Observações', 'left', '20%');
 
         // Formatadores
         $col_datahora->setTransformer([$this, 'formatarDataHora']);
-        $col_score->setTransformer(fn($v) => number_format($v, 1) . '%');
+        $col_score->setTransformer(fn($v) => number_format($v, 0)); // Pontos inteiros
 
-        // Adiciona as colunas
         $this->datagrid->addColumn($col_doc);
         $this->datagrid->addColumn($col_filial);
         $this->datagrid->addColumn($col_tipo);
@@ -54,8 +53,6 @@ class HistoricoList extends TPage
 
         // === PAINEL ===
         $panel = TPanelGroup::pack('Histórico de Auditorias Finalizadas', $this->datagrid);
-        
-        // 🔹 CORREÇÃO: Mudando de modal para página comum
         $panel->addHeaderActionLink(
             'Nova Auditoria',
             new \Adianti\Control\TAction(['inicioAuditoriaModal', 'onLoad']),
@@ -65,91 +62,76 @@ class HistoricoList extends TPage
         parent::add($panel);
     }
 
-    /**
-     * Carrega dados consolidados de ZCL010 e converte para formato ZCM010
-     */
     public function onReload($param = null)
     {
         try {
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
 
-            // Agrupa auditorias finalizadas
+            // === BUSCA CABEÇALHOS EM ZCM010 ===
             $sql = "
-           SELECT 
-           ZCM_FILIAL,
-        ZCM_TIPO,
-        ZCM_DATA,
-        ZCM_HORA,
-        ZCM_USUGIR,
-        COUNT(*) AS total_perguntas,
-        SUM(CASE WHEN ZCM_OBS IS NULL OR ZCM_OBS = '' THEN 1 ELSE 0 END) AS conformes,
-        STRING_AGG(
-            CASE 
-                WHEN ZCM_OBS IS NOT NULL AND ZCM_OBS <> ''
-                THEN ZCM_OBS
-                ELSE NULL 
-            END, 
-            '; '
-            )AS obs_nao_conformes
-              FROM ZCM010
-              WHERE D_E_L_E_T_ <> '*'
-               GROUP BY ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR
-             ORDER BY ZCM_DATA DESC, ZCM_HORA DESC
-";
+                SELECT 
+                    ZCM_DOC,
+                    ZCM_FILIAL,
+                    ZCM_TIPO,
+                    ZCM_DATA,
+                    ZCM_HORA,
+                    ZCM_USUGIR,
+                    ZCM_OBS
+                FROM ZCM010
+                WHERE D_E_L_E_T_ <> '*'
+                ORDER BY ZCM_DATA DESC, ZCM_HORA DESC
+            ";
 
             $result = $conn->query($sql);
             $this->datagrid->clear();
-            $contador = 1;
 
             foreach ($result as $row) {
-                $tipo_completo = trim($row['ZCL_TIPO']);
-                $tipo     = substr($tipo_completo, 0, 3); // Extrai os 3 primeiros caracteres
-                $data     = $row['ZCL_DATA'];
-                $hora     = $row['ZCL_HORA'];
-                $usuario  = trim($row['ZCL_USUARIO']);
-                $total    = $row['total_perguntas'];
-                $conformes = $row['conformes'];
-                $score    = $total > 0 ? ($conformes / $total) * 100 : 0;
-                $observacoes = $row['obs_nao_conformes'] ?? '';
+                $doc      = trim($row['ZCM_DOC']);
+                $filial   = trim($row['ZCM_FILIAL']);
+                $tipo     = trim($row['ZCM_TIPO']);
+                $data     = $row['ZCM_DATA'];
+                $hora     = $row['ZCM_HORA'];
+                $usuario  = trim($row['ZCM_USUGIR']);
+                $obs      = trim($row['ZCM_OBS'] ?? '');
 
-                $zcm_doc = str_pad($contador, 6, '0', STR_PAD_LEFT);
+                // === CÁLCULO DO SCORE: SOMA DOS ZCL_SCORE DAS RESPOSTAS 'S' ===
+                $sql_score = "
+                    SELECT COALESCE(SUM(cl.ZCL_SCORE), 0) as total_score
+                    FROM ZCN010 cn
+                    INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA 
+                                         AND cl.ZCL_TIPO = :tipo
+                                         AND cl.D_E_L_E_T_ <> '*'
+                    WHERE cn.ZCN_DOC = :doc
+                      AND cn.ZCN_NAOCO = 'N'  -- Apenas respostas 'S' (conformes)
+                      AND cn.D_E_L_E_T_ <> '*'
+                ";
+
+                $stmt = $conn->prepare($sql_score);
+                $stmt->execute([
+                    ':doc'  => $doc,
+                    ':tipo' => $tipo
+                ]);
+                $score_row = $stmt->fetch();
+                $score = $score_row['total_score'] ?? 0;
 
                 $item = (object)[
-                    'zcm_doc'      => $zcm_doc,
-                    'zcm_filial'   => 'N/A', // Não temos mais filial no ZCL010
-                    'zcm_tipo'     => $this->obterDescricaoTipo($tipo),
+                    'zcm_doc'      => $doc,
+                    'zcm_filial'   => $filial,
+                    'zcm_tipo'     => $tipo,
                     'zcm_datahora' => $data . $hora,
                     'zcm_usuario'  => $usuario,
-                    'score'        => $score,
-                    'zcm_obs'      => $observacoes,
-                    'tipo_cod'     => $tipo,
-                    'data'         => $data,
-                    'hora'         => $hora
+                    'score'        => (float)$score,
+                    'zcm_obs'      => $obs
                 ];
 
                 $this->datagrid->addItem($item);
-                $contador++;
             }
 
             TTransaction::close();
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao carregar histórico: ' . $e->getMessage());
             if (TTransaction::get()) TTransaction::rollback();
-        }
-    }
-
-    private function obterDescricaoTipo($tipo)
-    {
-        try {
-            TTransaction::open('auditoria');
-            $obj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->first();
-            TTransaction::close();
-            return $obj ? trim($obj->ZCK_DESCRI) : $tipo;
-        } catch (Exception $e) {
-            return $tipo;
         }
     }
 
@@ -181,8 +163,10 @@ class HistoricoList extends TPage
                 throw new Exception('Documento não informado.');
             }
 
-            // Aqui você pode abrir a visualização da auditoria
-            new TMessage('info', "Abrir auditoria do documento {$doc}");
+            // Redireciona para tela de visualização detalhada
+            TScript::create("
+                __adianti_load_page('index.php?class=AuditoriaView&method=onReload&key={$doc}');
+            ");
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }
@@ -194,9 +178,3 @@ class HistoricoList extends TPage
         parent::show();
     }
 }
-
-
-
-
-
-
