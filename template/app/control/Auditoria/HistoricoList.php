@@ -171,6 +171,25 @@ class HistoricoList extends TPage
             new TMessage('error', $e->getMessage());
         }
     }
+    /*
+      public function onView($param)
+{
+    try {
+        $doc = $param['zcm_doc'] ?? $param['key'] ?? null;
+
+        if (!$doc) {
+            throw new Exception('Documento não informado.');
+        }
+
+        // Redireciona para tela de visualização passando o DOC
+        AdiantiCoreApplication::loadPage('auditoriaView', 'onReload', ['key' => $doc]);
+
+    } catch (Exception $e) {
+        new TMessage('error', $e->getMessage());
+    }
+}
+    */
+
 
     public function show()
     {
