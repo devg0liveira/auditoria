@@ -14,6 +14,7 @@ use Adianti\Widget\Form\TCombo;
 use Adianti\Widget\Form\TButton;
 use Adianti\Widget\Form\THidden;
 use Adianti\Widget\Base\TScript;
+use Adianti\Widget\Form\TText;
 
 class checkListForm extends TPage
 {
@@ -24,8 +25,6 @@ class checkListForm extends TPage
         parent::__construct();
         $this->form = new BootstrapFormBuilder('form_checklist');
         $this->form->setFormTitle('CheckList de Auditoria');
-
-        // parent::add($this->form);
     }
 
     public function onStart($param)
@@ -41,7 +40,6 @@ class checkListForm extends TPage
 
             TTransaction::open('auditoria');
 
-            // === BUSCA O TIPO (ZCK010) ===
             $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->first();
@@ -49,73 +47,63 @@ class checkListForm extends TPage
                 throw new Exception('Tipo não encontrado.');
             }
 
-            // === BUSCA AS ETAPAS QUE PERTENCEM AO TIPO NA ZCL010 ===
             $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
 
             if (empty($etapas_tipo)) {
-                TTransaction::close();
                 throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo} encontrada em ZCL010.");
             }
 
-            // === BUSCA AS PERGUNTAS (ZCJ010) SOMENTE DAS ETAPAS VINCULADAS ===
             $criteria = new TCriteria;
             $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
             $criteria->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($etapas_tipo)));
             $criteria->setProperty('order', 'ZCJ_ETAPA');
 
             $repo = new TRepository('ZCJ010');
-            $perguntas = $repo->load($criteria);
-
-            $perguntas = is_array($perguntas) ? $perguntas : [];
+            $perguntas = $repo->load($criteria) ?? [];
 
             if (empty($perguntas)) {
-                TTransaction::close();
                 throw new Exception("Nenhuma pergunta encontrada para o tipo {$tipo}.");
             }
 
-            TTransaction::close();
-
+            // === BUSCA RESPOSTAS SALVAS (ZCN) EM MODO VISUALIZAÇÃO ===
             $respostas_salvas = [];
+            $obs_salvas = [];
 
-            // === SE ESTIVER EM MODO DE VISUALIZAÇÃO ===
             if ($view_mode && $view_data) {
-                $respostas = ZCL010::where('ZCL_TIPO', '=', $tipo)
-                    ->where('ZCL_DATA', '=', $view_data['data'])
-                    ->where('ZCL_HORA', '=', $view_data['hora'])
-                    ->where('ZCL_USUARIO', '=', $view_data['usuario'])
-                    ->where('D_E_L_E_T_', '<>', '*')
-                    ->load();
+                $criteria_cn = new TCriteria;
+                $criteria_cn->add(new TFilter('ZCN_DOC', '=', $view_data['doc']));
+                $criteria_cn->add(new TFilter('D_E_L_E_T_', '<>', '*'));
+                $repo_cn = new TRepository('ZCN');
+                $respostas = $repo_cn->load($criteria_cn);
 
                 foreach ($respostas as $r) {
-                    $respostas_salvas[$r->ZCL_ETAPA] = $r->ZCL_RESPOSTA;
+                    $respostas_salvas[$r->ZCN_ETAPA] = $r->ZCN_TIPO ?? '';
+                    $obs_salvas[$r->ZCN_ETAPA] = $r->ZCN_NAOCO ?? '';
                 }
             }
 
             TTransaction::close();
 
-            // === MONTA O FORMULÁRIO ===
-            $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $view_mode, $view_data);
+            $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $view_mode, $view_data);
+
         } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
             if (TTransaction::get()) TTransaction::rollback();
+            new TMessage('error', $e->getMessage());
         }
     }
 
-
-    private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $readonly = false, $view_data = null)
+    private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $readonly = false, $view_data = null)
     {
         $this->form = new BootstrapFormBuilder('form_checklist');
         $this->form->setColumnClasses(2, ['col-sm-8', 'col-sm-4']);
 
         $titulo = $readonly
-            ? "Visualização: {$tipoObj->ZCK_DESCRI} - " . $this->formatarData($view_data['data']) . ' ' . $this->formatarHora($view_data['hora'])
+            ? "Visualização: {$tipoObj->ZCK_DESCRI}"
             : "CheckList: {$tipoObj->ZCK_DESCRI}";
-
         $this->form->setFormTitle($titulo);
 
-        // Hidden
         $this->form->addFields([new THidden('tipo')]);
         $this->form->setData((object)['tipo' => $tipo]);
 
@@ -129,12 +117,10 @@ class checkListForm extends TPage
 
         TTransaction::open('auditoria');
 
-
         foreach ($perguntas as $p) {
             $etapa = $p->ZCJ_ETAPA;
             $desc  = $p->ZCJ_DESCRI;
 
-            // 🔹 Aqui você puxa o score da ZCL010 (onde ficam as etapas)
             $etapa_info = ZCL010::where('ZCL_ETAPA', '=', $etapa)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->first();
@@ -144,24 +130,28 @@ class checkListForm extends TPage
             $combo->addItems($opcoes);
             $combo->setSize('100%');
             $combo->setValue($respostas_salvas[$etapa] ?? 'C');
+            if ($readonly) $combo->setEditable(false);
 
-            if ($readonly) {
-                $combo->setEditable(false);
-            }
+            // Campo de observação sempre visível agora
+            $obs = new TText("obs_{$etapa}");
+            $obs->setSize('100%', 80);
+            $obs->setValue($obs_salvas[$etapa] ?? '');
+            if ($readonly) $obs->setEditable(false);
 
-            // 🔸 Cria o rótulo do score
             $score_label = new TLabel("<b>Score:</b> {$score}");
             $score_label->setFontColor('#666');
 
-            // 🔸 Adiciona ao formulário: pergunta + combo + score
             $this->form->addFields(
                 [new TLabel("<b>Etapa {$etapa}:</b> {$desc}")],
                 [$combo, $score_label]
             );
+            $this->form->addFields(
+                [new TLabel('Observações:')],
+                [$obs]
+            );
         }
 
         TTransaction::close();
-
 
         if (!$readonly) {
             $btn = new TButton('salvar');
@@ -173,61 +163,38 @@ class checkListForm extends TPage
 
         parent::add($this->form);
     }
+
     public static function onSave($param)
     {
         try {
             $tipo = $param['tipo'] ?? null;
-            if (!$tipo) {
-                throw new Exception('Tipo não informado.');
-            }
+            if (!$tipo) throw new Exception('Tipo não informado.');
 
             TTransaction::open('auditoria');
 
-            // === 1️⃣ DADOS BÁSICOS ===
             $data    = date('Ymd');
             $hora    = date('Hi');
             $usuario = TSession::getValue('userid') ?? 'SYSTEM';
             $filial  = $param['filial'] ?? '1';
 
-            /*
-            $filial  = $param['filial'] ?? null;
-        if (!$filial) {
-          throw new Exception('Filial não informada. Selecione uma filial antes de salvar.');
-        }
-
-        */
-            $obs     = $param['observacao'] ?? '';
-
-            // === 2️⃣ CRIA O REGISTRO PRINCIPAL (ZCM010) ===
-            // === 2️⃣ CRIA O REGISTRO PRINCIPAL (ZCM010) ===
+            // === CABEÇALHO (ZCM010) ===
             $zcm = new ZCM010;
-
-            // Gera DOC sequencial manualmente (varchar 6)
             $ultimo = ZCM010::orderBy('ZCM_DOC', 'desc')->first();
             $novoDoc = $ultimo ? str_pad(((int) $ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
-            $zcm->ZCM_DOC = $novoDoc;
+            $zcm->ZCM_DOC     = $novoDoc;
+            $zcm->ZCM_FILIAL  = $filial;
+            $zcm->ZCM_TIPO    = $tipo;
+            $zcm->ZCM_DATA    = $data;
+            $zcm->ZCM_HORA    = $hora;
+            $zcm->ZCM_USUARIO = $usuario;
 
-            $zcm->ZCM_FILIAL   = $filial;
-            $zcm->ZCM_TIPO     = $tipo;
-            $zcm->ZCM_DATA     = $data;
-            $zcm->ZCM_HORA     = $hora;
-            $zcm->ZCM_USUARIO  = $usuario;
-            $zcm->ZCM_OBS      = $obs;
-            $zcm->store();
+            $observacoes_gerais = []; // guarda todas observações de etapas
 
-            $documento = $zcm->ZCM_DOC;
-
-
-            // === 3️⃣ BUSCA AS ETAPAS VINCULADAS AO TIPO (ZCL010) ===
+            // === PERGUNTAS ===
             $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
 
-            if (empty($etapas_tipo)) {
-                throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo} encontrada em ZCL010.");
-            }
-
-            // === 4️⃣ BUSCA AS PERGUNTAS CORRESPONDENTES (ZCJ010) ===
             $criteria = new TCriteria;
             $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
             $criteria->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($etapas_tipo)));
@@ -236,59 +203,68 @@ class checkListForm extends TPage
             $repo = new TRepository('ZCJ010');
             $perguntas = $repo->load($criteria);
 
-            // === 5️⃣ SALVA AS RESPOSTAS NA ZCN010 ===
             $salvo = false;
 
             foreach ($perguntas as $p) {
                 $etapa    = $p->ZCJ_ETAPA;
-                $pergunta = $p->ZCJ_DESCRI ?? null;
-                $resposta = $param["resposta_{$etapa}"] ?? null;
+                $pergunta = $p->ZCJ_DESCRI ?? '';
+                $resposta = $param["resposta_{$etapa}"] ?? '';
+                $obs_etapa = trim($param["obs_{$etapa}"] ?? '');
 
                 if ($resposta) {
                     $zcn = new ZCN010;
-                    $zcn->ZCN_DOC      = $documento;
-                    $zcn->ZCN_ETAPA    = $etapa;
-                    $zcn->ZCN_PERGUNTA = $pergunta;
-                    $zcn->ZCN_RESPOSTA = $resposta;
-                    $zcn->ZCN_DATA     = $data;
-                    $zcn->ZCN_HORA     = $hora;
-                    $zcn->ZCN_USUARIO  = $usuario;
+                    $zcn->ZCN_DOC     = $novoDoc;
+                    $zcn->ZCN_ETAPA   = $etapa;
+                    $zcn->ZCN_DESCRI  = $pergunta;
+                    $zcn->ZCN_TIPO    = $resposta;
+                    $zcn->ZCN_DATA    = $data;
+                    $zcn->ZCN_HORA    = $hora;
+                    $zcn->ZCN_USUARIO = $usuario;
+
+                    // Só grava em ZCN_NAOCO se for ≠ Conforme
+                    $zcn->ZCN_NAOCO = ($resposta !== 'C') ? $obs_etapa : null;
+
                     $zcn->store();
+
+                    // acumula observações (todas, inclusive conforme)
+                    if ($obs_etapa !== '') {
+                        $observacoes_gerais[] = "Etapa {$etapa}: {$obs_etapa}";
+                    }
 
                     $salvo = true;
                 }
             }
 
-            if (!$salvo) {
-                throw new Exception('Nenhuma resposta selecionada.');
-            }
+            if (!$salvo) throw new Exception('Nenhuma resposta registrada.');
+
+            // Salva as observações gerais no cabeçalho
+            $zcm->ZCM_OBS = !empty($observacoes_gerais)
+                ? implode("\n", $observacoes_gerais)
+                : null;
+
+            $zcm->store();
 
             TTransaction::close();
 
-            // ✅ Mostra mensagem com o número do documento
-            new TMessage('info', "Auditoria nº {$documento} finalizada com sucesso!");
-
-            // ✅ Redireciona para HistoricoList passando o documento como parâmetro
+            new TMessage('info', "Auditoria nº {$novoDoc} finalizada com sucesso!");
             TScript::create("
-            setTimeout(() => {
-                Adianti.currentWindow?.close();
-                __adianti_load_page('index.php?class=HistoricoList&doc={$documento}');
-            }, 1500);
-        ");
+                setTimeout(() => {
+                    Adianti.currentWindow?.close();
+                    __adianti_load_page('index.php?class=HistoricoList&doc={$novoDoc}');
+                }, 1500);
+            ");
+
         } catch (Exception $e) {
-            if (TTransaction::get()) {
-                TTransaction::rollback();
-            }
+            if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
     }
-
-
 
     private function formatarData($d)
     {
         return strlen($d) == 8 ? substr($d, 6, 2) . '/' . substr($d, 4, 2) . '/' . substr($d, 0, 4) : $d;
     }
+
     private function formatarHora($h)
     {
         return strlen($h) == 6 ? substr($h, 0, 2) . ':' . substr($h, 2, 2) . ':' . substr($h, 4, 2) : $h;
