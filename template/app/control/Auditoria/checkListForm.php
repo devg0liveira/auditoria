@@ -245,6 +245,11 @@ class checkListForm extends TPage
                     // Salva observações por etapa em ZCN_OBS
                     $zcn->ZCN_OBS = $obs_etapa ?: null;
 
+                    // Define ZCN_NAOCO para opções NC, P, OP (não conforme ou similares)
+                    if (in_array($resposta, ['NC', 'P', 'OP'])) {
+                        $zcn->ZCN_NAOCO = $resposta;
+                    }
+
                     $zcn->store();
 
                     $salvo = true;
