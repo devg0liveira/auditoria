@@ -70,23 +70,32 @@ class checkListForm extends TPage
             // === BUSCA RESPOSTAS SALVAS (ZCN) EM MODO VISUALIZAÇÃO ===
             $respostas_salvas = [];
             $obs_salvas = [];
+            $obs_gerais_salva = '';
 
             if ($view_mode && $view_data) {
                 $criteria_cn = new TCriteria;
                 $criteria_cn->add(new TFilter('ZCN_DOC', '=', $view_data['doc']));
                 $criteria_cn->add(new TFilter('D_E_L_E_T_', '<>', '*'));
-                $repo_cn = new TRepository('ZCN');
+                $repo_cn = new TRepository('ZCN010');
                 $respostas = $repo_cn->load($criteria_cn);
 
                 foreach ($respostas as $r) {
                     $respostas_salvas[$r->ZCN_ETAPA] = $r->ZCN_TIPO ?? '';
-                    $obs_salvas[$r->ZCN_ETAPA] = $r->ZCN_NAOCO ?? '';
+                    $obs_salvas[$r->ZCN_ETAPA] = $r->ZCN_OBS ?? ''; // Usando ZCN_OBS para obs por etapa
+                }
+
+                // Carregar observações gerais de ZCM
+                $zcm = ZCM010::where('ZCM_DOC', '=', $view_data['doc'])
+                    ->where('D_E_L_E_T_', '<>', '*')
+                    ->first();
+                if ($zcm) {
+                    $obs_gerais_salva = $zcm->ZCM_OBS ?? '';
                 }
             }
 
             TTransaction::close();
 
-            $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $view_mode, $view_data);
+            $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $view_mode, $view_data, $obs_gerais_salva);
 
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
@@ -94,7 +103,7 @@ class checkListForm extends TPage
         }
     }
 
-    private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $readonly = false, $view_data = null)
+    private function montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $readonly = false, $view_data = null, $obs_gerais_salva = '')
     {
         $this->form = new BootstrapFormBuilder('form_checklist');
         $this->form->setColumnClasses(2, ['col-sm-8', 'col-sm-4']);
@@ -153,6 +162,17 @@ class checkListForm extends TPage
 
         TTransaction::close();
 
+        // Novo campo de observações gerais no final do checklist
+        $obs_gerais = new TText('observacoes_gerais');
+        $obs_gerais->setSize('100%', 120);
+        $obs_gerais->setValue($obs_gerais_salva);
+        if ($readonly) $obs_gerais->setEditable(false);
+
+        $this->form->addFields(
+            [new TLabel('Observações Gerais:')],
+            [$obs_gerais]
+        );
+
         if (!$readonly) {
             $btn = new TButton('salvar');
             $btn->setLabel('Finalizar Auditoria');
@@ -188,7 +208,8 @@ class checkListForm extends TPage
             $zcm->ZCM_HORA    = $hora;
             $zcm->ZCM_USUARIO = $usuario;
 
-            $observacoes_gerais = []; // guarda todas observações de etapas
+            // Observações gerais do novo campo (visível no historicolist)
+            $zcm->ZCM_OBS = trim($param['observacoes_gerais'] ?? '') ?: null;
 
             // === PERGUNTAS ===
             $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
@@ -221,26 +242,16 @@ class checkListForm extends TPage
                     $zcn->ZCN_HORA    = $hora;
                     $zcn->ZCN_USUARIO = $usuario;
 
-                    // Só grava em ZCN_NAOCO se for ≠ Conforme
-                    $zcn->ZCN_NAOCO = ($resposta !== 'C') ? $obs_etapa : null;
+                    // Salva observações por etapa em ZCN_OBS
+                    $zcn->ZCN_OBS = $obs_etapa ?: null;
 
                     $zcn->store();
-
-                    // acumula observações (todas, inclusive conforme)
-                    if ($obs_etapa !== '') {
-                        $observacoes_gerais[] = "Etapa {$etapa}: {$obs_etapa}";
-                    }
 
                     $salvo = true;
                 }
             }
 
             if (!$salvo) throw new Exception('Nenhuma resposta registrada.');
-
-            // Salva as observações gerais no cabeçalho
-            $zcm->ZCM_OBS = !empty($observacoes_gerais)
-                ? implode("\n", $observacoes_gerais)
-                : null;
 
             $zcm->store();
 
