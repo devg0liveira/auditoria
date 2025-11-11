@@ -48,7 +48,7 @@ class AuditoriaView extends TPage
         $this->form->addFields([new TLabel('Data/Hora')], [$datahora]);
         $this->form->addFields([new TLabel('Usuário')], [$usuario]);
         $this->form->addFields([new TLabel('Score')], [$score]);
-        $this->form->addFields([new TLabel('Observações')], [$obs]);
+        $this->form->addFields([new TLabel('Observações Gerais')], [$obs]);
 
         // Sem ações de submit/salvar para manter read-only
 
@@ -56,15 +56,17 @@ class AuditoriaView extends TPage
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
 
-        $col_etapa   = new TDataGridColumn('zcn_doc', 'Etapa', 'left');
-        $col_pergunta = new TDataGridColumn('zcn_etapa', 'Pergunta', 'left'); 
-        $col_resposta = new TDataGridColumn('zcn_naoco', 'Resposta (S/N)', 'center');
+        $col_etapa    = new TDataGridColumn('zcn_etapa', 'Etapa', 'left');
+        $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left');
+        $col_resposta = new TDataGridColumn('zcn_naoco', 'Resposta', 'center');
         $col_score    = new TDataGridColumn('zcl_score', 'Score', 'center');
+        $col_obs      = new TDataGridColumn('zcn_obs', 'Observações', 'left');
 
         $this->datagrid->addColumn($col_etapa);
         $this->datagrid->addColumn($col_pergunta);
         $this->datagrid->addColumn($col_resposta);
         $this->datagrid->addColumn($col_score);
+        $this->datagrid->addColumn($col_obs);
 
         // Sem ações de edição no datagrid
         $this->datagrid->createModel();
@@ -116,14 +118,14 @@ class AuditoriaView extends TPage
                 'score'        => $this->calcularScore($conn, $doc, trim($row_cab['ZCM_TIPO']))
             ]);
 
-            // === CARREGA CHECKLIST DE ZCN010 E ZCL010 ===
             $this->datagrid->clear();
             $sql_check = "
                 SELECT 
-                    cn.ZCN_DOC, cl.ZCN_ETAPA, cn.ZCN_NAOCO, cl.ZCL_SCORE
+                    cn.ZCN_DOC, cl.ZCL_ETAPA, cj.ZCJ_DESCRI, cn.ZCN_NAOCO, cl.ZCL_SCORE, cn.ZCN_OBS
                 FROM ZCN010 cn
-                INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo
-                WHERE cn.ZCN_DOC = :doc AND cn.D_E_L_E_T_ <> '*' AND cl.D_E_L_E_T_ <> '*'
+                INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo AND cl.D_E_L_E_T_ <> '*'
+                INNER JOIN ZCJ010 cj ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA AND cj.D_E_L_E_T_ <> '*'
+                WHERE cn.ZCN_DOC = :doc AND cn.D_E_L_E_T_ <> '*'
                 ORDER BY cn.ZCN_ETAPA
             ";
             $stmt_check = $conn->prepare($sql_check);
@@ -133,9 +135,11 @@ class AuditoriaView extends TPage
             foreach ($results as $row) {
                 $item = (object)[
                     'zcn_doc'    => trim($row['ZCN_DOC']),
-                    'zcn_etapa' => trim($row['ZCN_ETAPA'] ?? ''), // Ajuste o campo real da pergunta
-                    'zcn_naoco'    => trim($row['ZCN_NAOCO']),
-                    'zcl_score'    => (float)$row['ZCL_SCORE']
+                    'zcn_etapa'  => trim($row['ZCL_ETAPA'] ?? ''),
+                    'zcj_descri' => trim($row['ZCJ_DESCRI'] ?? ''),
+                    'zcn_naoco'  => trim($row['ZCN_NAOCO'] ?? ''),
+                    'zcl_score'  => (float)$row['ZCL_SCORE'],
+                    'zcn_obs'    => trim($row['ZCN_OBS'] ?? '')
                 ];
                 $this->datagrid->addItem($item);
             }
@@ -153,7 +157,7 @@ class AuditoriaView extends TPage
             SELECT COALESCE(SUM(cl.ZCL_SCORE), 0) as total_score
             FROM ZCN010 cn
             INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo AND cl.D_E_L_E_T_ <> '*'
-            WHERE cn.ZCN_DOC = :doc AND cn.ZCN_NAOCO = 'N' AND cn.D_E_L_E_T_ <> '*'
+            WHERE cn.ZCN_DOC = :doc AND (cn.ZCN_NAOCO = ' ' OR cn.ZCN_NAOCO IS NULL) AND cn.D_E_L_E_T_ <> '*'
         ";
         $stmt = $conn->prepare($sql_score);
         $stmt->execute([':doc' => $doc, ':tipo' => $tipo]);
