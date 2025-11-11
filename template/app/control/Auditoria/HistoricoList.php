@@ -1,6 +1,7 @@
 <?php
 
 use Adianti\Control\TPage;
+use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Widget\Container\TPanelGroup;
 use Adianti\Widget\Datagrid\TDataGrid;
 use Adianti\Widget\Datagrid\TDataGridColumn;
@@ -164,9 +165,9 @@ class HistoricoList extends TPage
             }
 
             // Redireciona para tela de visualização detalhada
-            TScript::create("
-                __adianti_load_page('index.php?class=AuditoriaView&method=onReload&key={$doc}');
-            ");
+           AdiantiCoreApplication::loadPage('AuditoriaView','onReload', ['key' => $doc]);
+
+        
         } catch (Exception $e) {
             new TMessage('error', $e->getMessage());
         }
