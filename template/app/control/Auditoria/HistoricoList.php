@@ -47,7 +47,7 @@ class HistoricoList extends TPage
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
 
-        // BOTÃO INICIATIVA - CORREÇÃO AQUI
+        // BOTÃO INICIATIVA 
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onLoad'], ['doc' => '{zcm_doc}']);
         $action_iniciativa->setLabel('Iniciativa');
         $action_iniciativa->setImage('fa:lightbulb yellow');

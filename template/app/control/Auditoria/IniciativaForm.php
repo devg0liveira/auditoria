@@ -26,10 +26,8 @@ class IniciativaForm extends TPage
         $this->form->style = 'padding:20px; max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1)';
     }
 
-    public function onLoad($param = null)
+    public function onLoad(array $param)
     {
-        // Garante que $param seja sempre um array
-        $param = is_array($param) ? $param : [];
 
         try {
             $doc = $param['doc'] ?? null;
@@ -122,7 +120,7 @@ class IniciativaForm extends TPage
                 $this->form->addFields([new TLabel('Observações')], [$obs]);
             }
 
-            $btn = $this->form->addAction('SALVAR PLANO DE AÇÃO', new TAction([$this, 'onSave']), 'fa:save green');
+            $btn = $this->form->addAction('SALVAR PLANO DE AÇÃO', new TAction(['IniciativaForm', 'onSave']), 'fa:save green');
             $btn->style = 'font-weight:bold; font-size:1.3em; padding:15px 50px; border-radius:8px';
 
             TTransaction::close();
@@ -134,10 +132,8 @@ class IniciativaForm extends TPage
         }
     }
 
-    public static function onSave($param = null)
+    public static function onSave(array $param)
     {
-        // Sempre converte em array para evitar erro em chamadas sem parâmetros
-        $param = is_array($param) ? $param : [];
 
         try {
             $doc = $param['doc'] ?? null;
@@ -165,8 +161,8 @@ class IniciativaForm extends TPage
                     if ($zcn) {
                         $zcn->ZCN_ACAO      = $param["acao_{$etapa}_{$seq}"] ?? '';
                         $zcn->ZCN_RESP      = $param["resp_{$etapa}_{$seq}"] ?? '';
-                        $zcn->ZCN_PRAZO     = str_replace('/', '', $param["prazo_{$etapa}_{$seq}"] ?? '');
-                        $zcn->ZCN_DATA_EXEC = str_replace('/', '', $param["exec_{$etapa}_{$seq}"] ?? '');
+                        $zcn->ZCN_PRAZO     = self::toDbDate($param["prazo_{$etapa}_{$seq}"] ?? null);
+                        $zcn->ZCN_DATA_EXEC = self::toDbDate($param["exec_{$etapa}_{$seq}"] ?? null);
                         $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
                         $zcn->ZCN_OBS       = $param["obs_{$etapa}_{$seq}"] ?? '';
                         $zcn->store();
@@ -188,6 +184,17 @@ class IniciativaForm extends TPage
         }
     }
 
+    private static function toDbDate($date)
+    {
+        if (strlen(trim($date)) == 10 && strpos($date, '/') !== false) {
+            $parts = explode('/', $date);
+            if (count($parts) === 3 && checkdate($parts[1], $parts[0], $parts[2])) {
+                return $parts[2].$parts[1].$parts[0];
+            }
+        }
+        return '';
+    }
+
     private function formatDate($date)
     {
         $date = trim($date ?? '');
@@ -197,9 +204,8 @@ class IniciativaForm extends TPage
         return '';
     }
 
-    public static function abrir($param = null)
+    public static function abrir(array $param)
     {
-        $param = is_array($param) ? $param : [];
         $doc = $param['doc'] ?? null;
 
         if ($doc && trim($doc) !== '') {

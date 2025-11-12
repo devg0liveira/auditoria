@@ -143,9 +143,9 @@
                 <icon></icon>
                 <action>PerguntaForm</action>
             </menuitem>
-            <menuitem label=''>
+            <menuitem label='IniciativaForm'>
                 <icon></icon>
-                <action></action>
+                <action>IniciativaForm</action>
             </menuitem>
         </menu>
     </menuitem>
