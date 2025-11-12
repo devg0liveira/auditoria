@@ -155,7 +155,7 @@ class checkListForm extends TPage
                 [$combo, $score_label]
             );
             $this->form->addFields(
-                [new TLabel('Observações:')],
+                [new TLabel('Problemas Encontrados')],
                 [$obs]
             );
         }

@@ -8,7 +8,6 @@ use Adianti\Widget\Datagrid\TDataGridColumn;
 use Adianti\Widget\Datagrid\TDataGridAction;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Database\TTransaction;
-use Adianti\Registry\TSession;
 use Adianti\Widget\Base\TScript;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
 
@@ -23,18 +22,16 @@ class HistoricoList extends TPage
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
 
-        // === COLUNAS DO DATAGRID ===
         $col_doc      = new TDataGridColumn('zcm_doc', 'Documento', 'center', '10%');
         $col_filial   = new TDataGridColumn('zcm_filial', 'Filial', 'left', '12%');
         $col_tipo     = new TDataGridColumn('zcm_tipo', 'Tipo', 'left', '18%');
         $col_datahora = new TDataGridColumn('zcm_datahora', 'Data/Hora', 'center', '15%');
         $col_usuario  = new TDataGridColumn('zcm_usuario', 'Usuário', 'left', '15%');
-        $col_score    = new TDataGridColumn('score', 'Score', 'center', '10%'); // Sem %
+        $col_score    = new TDataGridColumn('score', 'Score', 'center', '10%');
         $col_obs      = new TDataGridColumn('zcm_obs', 'Observações', 'left', '20%');
 
-        // Formatadores
         $col_datahora->setTransformer([$this, 'formatarDataHora']);
-        $col_score->setTransformer(fn($v) => number_format($v, 0)); // Pontos inteiros
+        $col_score->setTransformer(fn($v) => number_format($v, 0));
 
         $this->datagrid->addColumn($col_doc);
         $this->datagrid->addColumn($col_filial);
@@ -44,21 +41,22 @@ class HistoricoList extends TPage
         $this->datagrid->addColumn($col_score);
         $this->datagrid->addColumn($col_obs);
 
-        // === AÇÃO VER ===
+        // BOTÃO VER
         $action_view = new TDataGridAction([$this, 'onView'], ['zcm_doc' => '{zcm_doc}']);
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
 
+        // BOTÃO INICIATIVA - CORREÇÃO AQUI
+        $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onLoad'], ['doc' => '{zcm_doc}']);
+        $action_iniciativa->setLabel('Iniciativa');
+        $action_iniciativa->setImage('fa:lightbulb yellow');
+        $this->datagrid->addAction($action_iniciativa);
+
         $this->datagrid->createModel();
 
-        // === PAINEL ===
         $panel = TPanelGroup::pack('Histórico de Auditorias Finalizadas', $this->datagrid);
-        $panel->addHeaderActionLink(
-            'Nova Auditoria',
-            new \Adianti\Control\TAction(['inicioAuditoriaModal', 'onLoad']),
-            'fa:plus-circle green'
-        );
+        $panel->addHeaderActionLink('Nova Auditoria', new \Adianti\Control\TAction(['inicioAuditoriaModal', 'onLoad']), 'fa:plus-circle green');
 
         parent::add($panel);
     }
@@ -69,71 +67,48 @@ class HistoricoList extends TPage
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
 
-            // === BUSCA CABEÇALHOS EM ZCM010 ===
-            $sql = "
-                SELECT 
-                    ZCM_DOC,
-                    ZCM_FILIAL,
-                    ZCM_TIPO,
-                    ZCM_DATA,
-                    ZCM_HORA,
-                    ZCM_USUGIR,
-                    ZCM_OBS
-                FROM ZCM010
-                WHERE D_E_L_E_T_ <> '*'
-                ORDER BY ZCM_DATA DESC, ZCM_HORA DESC
-            ";
+            $sql = "SELECT ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
+                    FROM ZCM010 WHERE D_E_L_E_T_ <> '*' 
+                    ORDER BY ZCM_DATA DESC, ZCM_HORA DESC";
 
             $result = $conn->query($sql);
             $this->datagrid->clear();
 
             foreach ($result as $row) {
-                $doc      = trim($row['ZCM_DOC']);
-                $filial   = trim($row['ZCM_FILIAL']);
-                $tipo     = trim($row['ZCM_TIPO']);
-                $data     = $row['ZCM_DATA'];
-                $hora     = $row['ZCM_HORA'];
-                $usuario  = trim($row['ZCM_USUGIR']);
-                $obs      = trim($row['ZCM_OBS'] ?? '');
+                $doc = trim($row['ZCM_DOC']);
+                $tipo = trim($row['ZCM_TIPO']);
 
-                // === CÁLCULO DO SCORE: SOMA DOS ZCL_SCORE DAS RESPOSTAS 'S' ===
-                $sql_score = "
-                    SELECT COALESCE(SUM(cl.ZCL_SCORE), 0) as total_score
-                    FROM ZCN010 cn
-                    INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA 
-                                         AND cl.ZCL_TIPO = :tipo
-                                         AND cl.D_E_L_E_T_ <> '*'
-                    WHERE cn.ZCN_DOC = :doc
-                      AND cn.ZCN_NAOCO = 'N'  -- Apenas respostas 'S' (conformes)
-                      AND cn.D_E_L_E_T_ <> '*'
-                ";
+                $score_sql = "SELECT COALESCE(SUM(cl.ZCL_SCORE), 0)
+                              FROM ZCN010 cn
+                              INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo
+                              WHERE cn.ZCN_DOC = :doc AND cn.ZCN_NAOCO = 'N' AND cn.D_E_L_E_T_ <> '*'";
 
-                $stmt = $conn->prepare($sql_score);
-                $stmt->execute([
-                    ':doc'  => $doc,
-                    ':tipo' => $tipo
-                ]);
-                $score_row = $stmt->fetch();
-                $score = $score_row['total_score'] ?? 0;
+                $stmt = $conn->prepare($score_sql);
+                $stmt->execute([':doc' => $doc, ':tipo' => $tipo]);
+                $score = $stmt->fetchColumn();
 
                 $item = (object)[
                     'zcm_doc'      => $doc,
-                    'zcm_filial'   => $filial,
+                    'zcm_filial'   => trim($row['ZCM_FILIAL']),
                     'zcm_tipo'     => $tipo,
-                    'zcm_datahora' => $data . $hora,
-                    'zcm_usuario'  => $usuario,
+                    'zcm_datahora' => $row['ZCM_DATA'] . $row['ZCM_HORA'],
+                    'zcm_usuario'  => trim($row['ZCM_USUGIR']),
                     'score'        => (float)$score,
-                    'zcm_obs'      => $obs
+                    'zcm_obs'      => trim($row['ZCM_OBS'] ?? '')
                 ];
-
                 $this->datagrid->addItem($item);
             }
-
             TTransaction::close();
         } catch (Exception $e) {
-            new TMessage('error', 'Erro ao carregar histórico: ' . $e->getMessage());
-            if (TTransaction::get()) TTransaction::rollback();
+            new TMessage('error', 'Erro ao carregar: ' . $e->getMessage());
+            TTransaction::rollbackAll();
         }
+    }
+
+    private function formatDate($date)
+    {
+        return ($date && strlen($date) == 8) ? 
+            substr($date, 6, 2) . '/' . substr($date, 4, 2) . '/' . substr($date, 0, 4) : '';
     }
 
     public function formatarDataHora($value)
@@ -141,56 +116,19 @@ class HistoricoList extends TPage
         if (strlen($value) >= 14) {
             $data = substr($value, 0, 8);
             $hora = substr($value, 8, 6);
-            return $this->formatarData($data) . ' ' . $this->formatarHora($hora);
+            return $this->formatDate($data) . ' ' . 
+                   substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2);
         }
         return $value;
     }
 
-    private function formatarData($data)
-    {
-        return strlen($data) == 8 ? substr($data, 6, 2) . '/' . substr($data, 4, 2) . '/' . substr($data, 0, 4) : $data;
-    }
-
-    private function formatarHora($hora)
-    {
-        return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
-    }
-
     public function onView($param)
     {
-        try {
-            $doc = $param['zcm_doc'] ?? null;
-            if (!$doc) {
-                throw new Exception('Documento não informado.');
-            }
-
-            // Redireciona para tela de visualização detalhada
-           AdiantiCoreApplication::loadPage('AuditoriaView','onReload', ['key' => $doc]);
-
-        
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
+        $doc = $param['zcm_doc'] ?? null;
+        if ($doc) {
+            AdiantiCoreApplication::loadPage('AuditoriaView', 'onReload', ['key' => $doc]);
         }
     }
-    /*
-      public function onView($param)
-{
-    try {
-        $doc = $param['zcm_doc'] ?? $param['key'] ?? null;
-
-        if (!$doc) {
-            throw new Exception('Documento não informado.');
-        }
-
-        // Redireciona para tela de visualização passando o DOC
-        AdiantiCoreApplication::loadPage('auditoriaView', 'onReload', ['key' => $doc]);
-
-    } catch (Exception $e) {
-        new TMessage('error', $e->getMessage());
-    }
-}
-    */
-
 
     public function show()
     {
