@@ -24,6 +24,8 @@ class IniciativaForm extends TPage
         $this->form = new BootstrapFormBuilder('form_iniciativa');
         $this->form->setFormTitle('Plano de Ação - Iniciativas de Melhoria');
         $this->form->style = 'padding:20px; max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1)';
+        $action_save = new TAction([$this, 'onSave']);
+        $this->form->addAction('Salvar', $action_save, 'fa:save green');
     }
 
     public function onLoad(array $param)
@@ -71,7 +73,7 @@ class IniciativaForm extends TPage
 
             $this->form->clear();
             $this->form->addFields([new TLabel("<h3 style='color:#0066cc; text-align:center'>Auditoria: <b>{$doc}</b></h3>")]);
-            
+
             $hiddenDoc = new THidden('doc');
             $hiddenDoc->setValue($doc);
             $this->form->addFields([$hiddenDoc]);
@@ -91,19 +93,19 @@ class IniciativaForm extends TPage
 
                 $acao   = new TText("acao_{$key}");
                 $acao->setSize('100%', 90);
-                
+
                 $resp   = new TEntry("resp_{$key}");
                 $resp->setSize('100%');
-                
+
                 $prazo  = new TDate("prazo_{$key}");
                 $prazo->setMask('dd/mm/yyyy');
-                
+
                 $exec   = new TDate("exec_{$key}");
                 $exec->setMask('dd/mm/yyyy');
-                
+
                 $status = new TCombo("status_{$key}");
                 $status->addItems(['A' => 'Em Andamento', 'C' => 'Concluído']);
-                
+
                 $obs    = new TText("obs_{$key}");
                 $obs->setSize('100%', 70);
 
@@ -120,80 +122,85 @@ class IniciativaForm extends TPage
                 $this->form->addFields([new TLabel('Observações')], [$obs]);
             }
 
-            $btn = $this->form->addAction('SALVAR PLANO DE AÇÃO', new TAction(['IniciativaForm', 'onSave']), 'fa:save green');
-            $btn->style = 'font-weight:bold; font-size:1.3em; padding:15px 50px; border-radius:8px';
-
             TTransaction::close();
             parent::add($this->form);
-
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao carregar: ' . $e->getMessage());
             TTransaction::rollbackAll();
         }
     }
 
-    public static function onSave(array $param)
-    {
+   public static function onSave(array $param = [])
+{
+    try {
+        if (empty($param)) {
+            throw new Exception('Nenhum dado recebido para salvar.');
+        }
 
-        try {
-            $doc = $param['doc'] ?? null;
-            if (!$doc || trim($doc) === '') {
-                throw new Exception('Documento não informado.');
-            }
+        $doc = $param['doc'] ?? null;
+        if (!$doc || trim($doc) === '') {
+            throw new Exception('Documento não informado.');
+        }
 
-            TTransaction::open('auditoria');
+        TTransaction::open('auditoria');
 
-            foreach ($param as $key => $value) {
-                if (strpos($key, 'acao_') === 0) {
-                    $parts = explode('_', $key);
-                    $etapa = $parts[1] ?? null;
-                    $seq   = $parts[2] ?? '001';
-                    
-                    if (!$etapa) {
-                        continue;
-                    }
+        foreach ($param as $key => $value) {
+            if (strpos($key, 'acao_') === 0) {
+                $parts = explode('_', $key);
+                $etapa = $parts[1] ?? null;
+                $seq   = $parts[2] ?? '001';
+                if (!$etapa) continue;
 
-                    $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
-                                 ->where('ZCN_ETAPA', '=', $etapa)
-                                 ->where('ZCN_SEQ', '=', $seq)
-                                 ->first();
+                $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
+                             ->where('ZCN_ETAPA', '=', $etapa)
+                             ->where('ZCN_SEQ', '=', $seq)
+                             ->first();
 
-                    if ($zcn) {
-                        $zcn->ZCN_ACAO      = $param["acao_{$etapa}_{$seq}"] ?? '';
-                        $zcn->ZCN_RESP      = $param["resp_{$etapa}_{$seq}"] ?? '';
-                        $zcn->ZCN_PRAZO     = self::toDbDate($param["prazo_{$etapa}_{$seq}"] ?? null);
-                        $zcn->ZCN_DATA_EXEC = self::toDbDate($param["exec_{$etapa}_{$seq}"] ?? null);
-                        $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
-                        $zcn->ZCN_OBS       = $param["obs_{$etapa}_{$seq}"] ?? '';
-                        $zcn->store();
-                    }
+                if ($zcn) {
+                    $zcn->ZCN_ACAO      = $param["acao_{$etapa}_{$seq}"] ?? '';
+                    $zcn->ZCN_RESP      = $param["resp_{$etapa}_{$seq}"] ?? '';
+                    $zcn->ZCN_PRAZO     = self::toDbDate($param["prazo_{$etapa}_{$seq}"] ?? null);
+                    $zcn->ZCN_DATA_EXEC = self::toDbDate($param["exec_{$etapa}_{$seq}"] ?? null);
+                    $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
+                    $zcn->ZCN_OBS       = $param["obs_{$etapa}_{$seq}"] ?? '';
+                    $zcn->store();
                 }
             }
-
-            TTransaction::close();
-
-            new TMessage('info', 'Plano de ação salvo com sucesso!');
-            TScript::create("
-                __adianti_success_message('Salvo com sucesso!');
-                setTimeout(() => { __adianti_load_page('?class=HistoricoList'); }, 1500);
-            ");
-
-        } catch (Exception $e) {
-            new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
-            TTransaction::rollbackAll();
         }
+
+        TTransaction::close();
+        new TMessage('info', 'Plano de ação salvo com sucesso!');
+
+        TScript::create("
+            __adianti_success_message('Salvo com sucesso!');
+            setTimeout(() => { __adianti_load_page('?class=HistoricoList'); }, 1500);
+        ");
+
+    } catch (Exception $e) {
+        new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+        TTransaction::rollbackAll();
     }
+}
+
 
     private static function toDbDate($date)
-    {
-        if (strlen(trim($date)) == 10 && strpos($date, '/') !== false) {
-            $parts = explode('/', $date);
-            if (count($parts) === 3 && checkdate($parts[1], $parts[0], $parts[2])) {
-                return $parts[2].$parts[1].$parts[0];
-            }
-        }
-        return '';
+{
+    $date = trim($date ?? '');
+    if ($date === '' || $date === null) {
+        return null; // retorna null se o campo estiver vazio
     }
+
+    // Espera formato dd/mm/yyyy
+    $parts = explode('/', $date);
+    if (count($parts) === 3) {
+        [$day, $month, $year] = $parts;
+        if (checkdate((int)$month, (int)$day, (int)$year)) {
+            return sprintf('%04d%02d%02d', $year, $month, $day); // retorna yyyymmdd
+        }
+    }
+
+    return null; // retorna null se formato for inválido
+}
 
     private function formatDate($date)
     {
