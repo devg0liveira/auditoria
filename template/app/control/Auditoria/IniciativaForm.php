@@ -187,19 +187,18 @@ class IniciativaForm extends TPage
 {
     $date = trim($date ?? '');
     if ($date === '' || $date === null) {
-        return null; // retorna null se o campo estiver vazio
+        return null; 
     }
 
-    // Espera formato dd/mm/yyyy
     $parts = explode('/', $date);
     if (count($parts) === 3) {
         [$day, $month, $year] = $parts;
         if (checkdate((int)$month, (int)$day, (int)$year)) {
-            return sprintf('%04d%02d%02d', $year, $month, $day); // retorna yyyymmdd
+            return sprintf('%04d%02d%02d', $year, $month, $day);
         }
     }
 
-    return null; // retorna null se formato for inválido
+    return null; 
 }
 
     private function formatDate($date)
@@ -211,14 +210,4 @@ class IniciativaForm extends TPage
         return '';
     }
 
-    public static function abrir(array $param)
-    {
-        $doc = $param['doc'] ?? null;
-
-        if ($doc && trim($doc) !== '') {
-            AdiantiCoreApplication::loadPage('IniciativaForm', 'onLoad', ['doc' => $doc]);
-        } else {
-            new TMessage('error', 'Documento não informado para abrir o plano de ação.');
-        }
-    }
 }

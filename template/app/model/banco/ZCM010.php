@@ -5,7 +5,7 @@ class ZCM010 extends TRecord
 {
     const TABLENAME  = 'ZCM010';
     const PRIMARYKEY = 'R_E_C_N_O_';
-    const IDPOLICY   = 'max'; // Usa o maior valor + 1
+    const IDPOLICY   = 'max'; 
 
     public function __construct($id = NULL)
     {

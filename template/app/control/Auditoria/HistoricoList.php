@@ -31,7 +31,6 @@ class HistoricoList extends TPage
         $col_obs      = new TDataGridColumn('zcm_obs', 'Observações', 'left', '20%');
 
         $col_datahora->setTransformer([$this, 'formatarDataHora']);
-        $col_score->setTransformer(fn($v) => number_format($v, 0));
 
         $this->datagrid->addColumn($col_doc);
         $this->datagrid->addColumn($col_filial);
@@ -41,13 +40,11 @@ class HistoricoList extends TPage
         $this->datagrid->addColumn($col_score);
         $this->datagrid->addColumn($col_obs);
 
-        // BOTÃO VER
         $action_view = new TDataGridAction([$this, 'onView'], ['zcm_doc' => '{zcm_doc}']);
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
 
-        // BOTÃO INICIATIVA 
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onLoad'], ['doc' => '{zcm_doc}']);
         $action_iniciativa->setLabel('Iniciativa');
         $action_iniciativa->setImage('fa:lightbulb yellow');

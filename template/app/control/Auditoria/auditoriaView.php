@@ -21,7 +21,6 @@ class AuditoriaView extends TPage
     {
         parent::__construct();
 
-        // === FORMULÁRIO PARA CABEÇALHO (READ-ONLY) ===
         $this->form = new BootstrapFormBuilder('form_auditoria_view');
         $this->form->setFormTitle('Detalhes da Auditoria');
 
@@ -33,7 +32,6 @@ class AuditoriaView extends TPage
         $score    = new TEntry('score');
         $obs      = new TEntry('zcm_obs');
 
-        // Tornar todos os campos read-only
         $doc->setEditable(false);
         $filial->setEditable(false);
         $tipo->setEditable(false);
@@ -50,9 +48,7 @@ class AuditoriaView extends TPage
         $this->form->addFields([new TLabel('Score')], [$score]);
         $this->form->addFields([new TLabel('Observações Gerais')], [$obs]);
 
-        // Sem ações de submit/salvar para manter read-only
 
-        // === DATAGRID PARA CHECKLIST (READ-ONLY) ===
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
 
@@ -68,10 +64,8 @@ class AuditoriaView extends TPage
         $this->datagrid->addColumn($col_score);
         $this->datagrid->addColumn($col_obs);
 
-        // Sem ações de edição no datagrid
         $this->datagrid->createModel();
 
-        // === PAINEL ===
         $panel = new TPanelGroup('Checklist da Auditoria');
         $panel->add($this->datagrid);
 
@@ -90,7 +84,6 @@ class AuditoriaView extends TPage
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
 
-            // === CARREGA CABEÇALHO DE ZCM010 ===
             $sql_cab = "
                 SELECT 
                     ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
@@ -107,7 +100,6 @@ class AuditoriaView extends TPage
 
             $datahora = $this->formatarData($row_cab['ZCM_DATA']) . ' ' . $this->formatarHora($row_cab['ZCM_HORA']);
 
-            // Preenche o form
             $this->form->setData((object)[
                 'zcm_doc'      => trim($row_cab['ZCM_DOC']),
                 'zcm_filial'   => trim($row_cab['ZCM_FILIAL']),
@@ -175,11 +167,4 @@ class AuditoriaView extends TPage
         return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
     }
 
-    public function show()
-    {
-        if (!$this->form->getData()) {
-            $this->onReload(); // Carrega automaticamente
-        }
-        parent::show();
-    }
 }

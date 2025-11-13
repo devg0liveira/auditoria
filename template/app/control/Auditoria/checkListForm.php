@@ -67,7 +67,6 @@ class checkListForm extends TPage
                 throw new Exception("Nenhuma pergunta encontrada para o tipo {$tipo}.");
             }
 
-            // === BUSCA RESPOSTAS SALVAS (ZCN) EM MODO VISUALIZAÇÃO ===
             $respostas_salvas = [];
             $obs_salvas = [];
             $obs_gerais_salva = '';
@@ -81,10 +80,9 @@ class checkListForm extends TPage
 
                 foreach ($respostas as $r) {
                     $respostas_salvas[$r->ZCN_ETAPA] = $r->ZCN_TIPO ?? '';
-                    $obs_salvas[$r->ZCN_ETAPA] = $r->ZCN_OBS ?? ''; // Usando ZCN_OBS para obs por etapa
+                    $obs_salvas[$r->ZCN_ETAPA] = $r->ZCN_OBS ?? '';
                 }
 
-                // Carregar observações gerais de ZCM
                 $zcm = ZCM010::where('ZCM_DOC', '=', $view_data['doc'])
                     ->where('D_E_L_E_T_', '<>', '*')
                     ->first();
@@ -141,7 +139,6 @@ class checkListForm extends TPage
             $combo->setValue($respostas_salvas[$etapa] ?? 'C');
             if ($readonly) $combo->setEditable(false);
 
-            // Campo de observação sempre visível agora
             $obs = new TText("obs_{$etapa}");
             $obs->setSize('100%', 80);
             $obs->setValue($obs_salvas[$etapa] ?? '');
@@ -162,7 +159,6 @@ class checkListForm extends TPage
 
         TTransaction::close();
 
-        // Novo campo de observações gerais no final do checklist
         $obs_gerais = new TText('observacoes_gerais');
         $obs_gerais->setSize('100%', 120);
         $obs_gerais->setValue($obs_gerais_salva);
@@ -197,7 +193,6 @@ class checkListForm extends TPage
             $usuario = TSession::getValue('userid') ?? 'SYSTEM';
             $filial  = $param['filial'] ?? '1';
 
-            // === CABEÇALHO (ZCM010) ===
             $zcm = new ZCM010;
             $ultimo = ZCM010::orderBy('ZCM_DOC', 'desc')->first();
             $novoDoc = $ultimo ? str_pad(((int) $ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
@@ -208,10 +203,8 @@ class checkListForm extends TPage
             $zcm->ZCM_HORA    = $hora;
             $zcm->ZCM_USUARIO = $usuario;
 
-            // Observações gerais do novo campo (visível no historicolist)
             $zcm->ZCM_OBS = trim($param['observacoes_gerais'] ?? '') ?: null;
 
-            // === PERGUNTAS ===
             $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
@@ -242,10 +235,8 @@ class checkListForm extends TPage
                     $zcn->ZCN_HORA    = $hora;
                     $zcn->ZCN_USUARIO = $usuario;
 
-                    // Salva observações por etapa em ZCN_OBS
                     $zcn->ZCN_OBS = $obs_etapa ?: null;
 
-                    // Define ZCN_NAOCO para opções NC, P, OP (não conforme ou similares)
                     if (in_array($resposta, ['NC', 'P', 'OP'])) {
                         $zcn->ZCN_NAOCO = $resposta;
                     }
@@ -274,16 +265,6 @@ class checkListForm extends TPage
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
-    }
-
-    private function formatarData($d)
-    {
-        return strlen($d) == 8 ? substr($d, 6, 2) . '/' . substr($d, 4, 2) . '/' . substr($d, 0, 4) : $d;
-    }
-
-    private function formatarHora($h)
-    {
-        return strlen($h) == 6 ? substr($h, 0, 2) . ':' . substr($h, 2, 2) . ':' . substr($h, 4, 2) : $h;
     }
 
     public static function onOpenCurtain($param)

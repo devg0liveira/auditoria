@@ -35,16 +35,6 @@ class TipoForm extends TPage
         parent::add($this->form);
     }
 
-    public function onEdit($param)
-    {
-        if (isset($param['key'])) {
-            TTransaction::open('auditoria');
-            $obj = ZCK010::find($param['key']);
-            TTransaction::close();
-            if ($obj) $this->form->setData($obj);
-        }
-    }
-
     public static function onSave($param)
     {
         try {
@@ -57,7 +47,6 @@ class TipoForm extends TPage
             $obj = new ZCK010;
             $obj->fromArray($param);
 
-            // Garante ZCK_TIPO com autoincremento (+1 do maior valor numérico existente)
             if (!$obj->ZCK_TIPO) {
                 $conn = TTransaction::get();
                 $result = $conn->query("
@@ -70,11 +59,9 @@ class TipoForm extends TPage
                 $obj->ZCK_TIPO = str_pad($max + 1, 3, '0', STR_PAD_LEFT);
             }
 
-            // Campos obrigatórios (sem ZCK_FILIAL)
             $obj->ZCK_DATA   = date('Ymd');
             $obj->ZCK_HORA   = date('Hi');
-            $obj->ZCK_USUGIR = 'SYSTEM';
-            $obj->ZCK_DOC    = 'CADTIPO';
+            $obj->ZCK_USUGIR = 'Gabriel';
 
             $obj->store();
 

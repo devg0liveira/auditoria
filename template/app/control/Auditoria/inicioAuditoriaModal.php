@@ -24,32 +24,27 @@ class inicioAuditoriaModal extends TPage
         $this->form = new BootstrapFormBuilder('form_inicio_auditoria');
         $this->form->setFormTitle('Iniciar Nova Auditoria');
 
-        // === CARREGA FILIAIS ===
         $filiais = $this->carregarFiliais();
         $filial = new TCombo('filial');
         $filial->addItems($filiais);
         $filial->setSize('70%');
         $filial->setDefaultOption('Selecione a filial...');
 
-        // === CARREGA TIPOS (ZCK_TIPO como chave) ===
         $tipo = new TDBCombo('tipo', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_TIPO');
         $tipo->setSize('70%');
         $tipo->setDefaultOption('Selecione o tipo...');
 
-        // === BOTÃO CONFIRMAR ===
         $btn_confirmar = new TButton('btn_confirmar');
         $btn_confirmar->setLabel('Iniciar Auditoria');
         $btn_confirmar->setImage('fa:play-circle green');
         $btn_confirmar->setAction(new TAction([$this, 'onConfirmar']));
 
-        // === MONTAGEM DO FORMULÁRIO ===
         $this->form->addFields([new TLabel('Filial <span style="color:red">*</span>:')], [$filial]);
         $this->form->addFields([new TLabel('Tipo <span style="color:red">*</span>:')], [$tipo]);
         $this->form->addFields([], [$btn_confirmar]);
 
         $this->form->setFields([$filial, $tipo, $btn_confirmar]);
 
-        // === CONTAINER ===
         $container = new TVBox;
         $container->style = 'width: 100%';
         $container->add($this->form);
@@ -57,14 +52,11 @@ class inicioAuditoriaModal extends TPage
     }
 
      public function onLoad($param = null)
-    {
-        // Apenas renderiza a página
-        // O formulário já está montado no construtor
-    }
+     {
+        
+     }
+    
 
-    /**
-     * Carrega filiais distintas da tabela ZCK010
-     */
     private function carregarFiliais()
     {
         try {
@@ -101,13 +93,9 @@ class inicioAuditoriaModal extends TPage
         }
     }
 
-    /**
-     * Apenas valida e redireciona para o CheckList (SEM CRIAR NADA NO ZCK010)
-     */
     public static function onConfirmar($param)
     {
         try {
-            // Validações
             if (empty($param['filial'])) {
                 throw new Exception('Selecione a filial.');
             }
@@ -117,7 +105,6 @@ class inicioAuditoriaModal extends TPage
 
             TTransaction::open('auditoria');
 
-            // Valida se o tipo existe
             $tipoObj = ZCK010::find($param['tipo']);
             if (!$tipoObj || $tipoObj->D_E_L_E_T_ === '*') {
                 throw new Exception('Tipo de auditoria não encontrado.');
@@ -125,11 +112,9 @@ class inicioAuditoriaModal extends TPage
 
             TTransaction::close();
 
-            // Salva na sessão para uso no CheckList
             TSession::setValue('auditoria_filial', $param['filial']);
             TSession::setValue('auditoria_tipo', $param['tipo']);
 
-            // Redireciona para o CheckList
             TScript::create("
                 __adianti_load_page('index.php?class=checkListForm&method=onStart&filial={$param['filial']}&tipo={$param['tipo']}');
             ");
@@ -140,9 +125,7 @@ class inicioAuditoriaModal extends TPage
         }
     }
 
-    /**
-     * Abre modal
-     */
+    
     public static function onOpenCurtain($param)
     {
         $page = \Adianti\Control\TWindow::create('Iniciar Nova Auditoria', 0.6, 0.5);

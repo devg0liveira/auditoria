@@ -111,41 +111,17 @@
         
     <menuitem label='Auditoria'>
         <menu>
-            <menuitem label='Histórico auditoria'>
-                <icon></icon>
+            <menuitem label='Insperções'>
+                <icon>fas:file-alt fa-fw</icon>
                 <action>HistoricoList</action>
             </menuitem>
-            <menuitem label='checkList'>
-                <icon></icon>
-                <action>checkList</action>
-            </menuitem>
-            <menuitem label='inspercoes'>
-                <icon></icon>
-                <action>inspercoes</action>
-            </menuitem>
-            <menuitem label='descricoes'>
-                <icon></icon>
-                <action>descricoes</action>
-            </menuitem>
-            <menuitem label='inicioAuditoriaModal'>
-                <icon></icon>
-                <action>inicioAuditoriaModal</action>
-            </menuitem>
-            <menuitem label='CheckListForm'>
-                <icon></icon>
-                <action>CheckListForm</action>
-            </menuitem>
-            <menuitem label='TipoForm'>
-                <icon></icon>
+            <menuitem label='Etapas De Insperção'>
+                <icon>fas:plus</icon>
                 <action>TipoForm</action>
             </menuitem>
-            <menuitem label='PerguntaForm'>
-                <icon></icon>
+            <menuitem label='Etapas Genéricas'>
+                <icon>fas:plus</icon>
                 <action>PerguntaForm</action>
-            </menuitem>
-            <menuitem label='IniciativaForm'>
-                <icon></icon>
-                <action>IniciativaForm</action>
             </menuitem>
         </menu>
     </menuitem>
