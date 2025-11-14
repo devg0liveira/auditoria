@@ -2,6 +2,7 @@
 
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
+use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Database\TCriteria;
 use Adianti\Database\TFilter;
 use Adianti\Database\TRepository;
@@ -190,7 +191,7 @@ class checkListForm extends TPage
 
             $data    = date('Ymd');
             $hora    = date('Hi');
-            $usuario = TSession::getValue('userid') ?? 'SYSTEM';
+            $usuario = TSession::getValue('userid') ?? 'Gabriel';
             $filial  = $param['filial'] ?? '1';
 
             $zcm = new ZCM010;
@@ -254,18 +255,14 @@ class checkListForm extends TPage
             TTransaction::close();
 
             new TMessage('info', "Auditoria nº {$novoDoc} finalizada com sucesso!");
-            TScript::create("
-                setTimeout(() => {
-                    Adianti.currentWindow?.close();
-                    __adianti_load_page('index.php?class=HistoricoList&doc={$novoDoc}');
-                }, 1500);
-            ");
 
-        } catch (Exception $e) {
-            if (TTransaction::get()) TTransaction::rollback();
-            new TMessage('error', $e->getMessage());
-        }
+        AdiantiCoreApplication::loadPage('HistoricoList&doc={$novoDoc}', 'onReload');
+
+    } catch (Exception $e) {
+        new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+        TTransaction::rollbackAll();
     }
+}
 
     public static function onOpenCurtain($param)
     {
