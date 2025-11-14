@@ -67,7 +67,7 @@ class IniciativaForm extends TPage
             if (empty($ncs)) {
                 TTransaction::close();
                 new TMessage('info', 'Nenhuma não conformidade encontrada para plano de ação.');
-                TScript::create("setTimeout(() => { __adianti_load_page('?class=HistoricoList'); }, 2000);");
+                AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
                 return;
             }
 
@@ -169,12 +169,11 @@ class IniciativaForm extends TPage
         }
 
         TTransaction::close();
-        new TMessage('info', 'Plano de ação salvo com sucesso!');
 
-        TScript::create("
-            __adianti_success_message('Salvo com sucesso!');
-            setTimeout(() => { __adianti_load_page('?class=HistoricoList'); }, 1500);
-        ");
+
+     new TMessage('info', 'Plano de ação salvo com sucesso!');
+
+        AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
 
     } catch (Exception $e) {
         new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
