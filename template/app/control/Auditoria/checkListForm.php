@@ -1,5 +1,6 @@
 <?php
 
+use Adianti\Control\TAction;
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
 use Adianti\Core\AdiantiCoreApplication;
@@ -8,6 +9,7 @@ use Adianti\Database\TFilter;
 use Adianti\Database\TRepository;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
+use Adianti\Validator\TRequiredValidator;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Widget\Form\TLabel;
@@ -95,7 +97,6 @@ class checkListForm extends TPage
             TTransaction::close();
 
             $this->montarFormulario($tipoObj, $tipo, $perguntas, $respostas_salvas, $obs_salvas, $view_mode, $view_data, $obs_gerais_salva);
-
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
@@ -137,13 +138,14 @@ class checkListForm extends TPage
             $combo = new TCombo("resposta_{$etapa}");
             $combo->addItems($opcoes);
             $combo->setSize('100%');
-            $combo->setValue($respostas_salvas[$etapa] ?? 'C');
-            if ($readonly) $combo->setEditable(false);
+            $combo->setValue($respostas_salvas[$etapa] ?? '');
+            $combo->addValidation("Etapa {$etapa} - Conformidade", new TRequiredValidator);
 
             $obs = new TText("obs_{$etapa}");
             $obs->setSize('100%', 80);
             $obs->setValue($obs_salvas[$etapa] ?? '');
-            if ($readonly) $obs->setEditable(false);
+            $obs->addValidation("Etapa {$etapa} - Observações", new TRequiredValidator);
+
 
             $score_label = new TLabel("<b>Score:</b> {$score}");
             $score_label->setFontColor('#666');
@@ -164,6 +166,7 @@ class checkListForm extends TPage
         $obs_gerais->setSize('100%', 120);
         $obs_gerais->setValue($obs_gerais_salva);
         if ($readonly) $obs_gerais->setEditable(false);
+        
 
         $this->form->addFields(
             [new TLabel('Observações Gerais:')],
@@ -171,12 +174,43 @@ class checkListForm extends TPage
         );
 
         if (!$readonly) {
+            $this->form->addAction('Voltar', new TAction(['inicioAuditoriaModal', 'onReload']), 'fa:arrow-left');
+
             $btn = new TButton('salvar');
-            $btn->setLabel('Finalizar Auditoria');
-            $btn->setImage('fa:check green');
-            $btn->setAction(new \Adianti\Control\TAction([$this, 'onSave']));
+            $btn->setLabel('Salvar');
+            $btn->setImage('fa:save green');
+            $btn->setAction(new TAction([$this, 'onSave']));
+
+            $btn->style = 'display:none';
+
             $this->form->addFields([], [$btn]);
+
+              TScript::create("
+        function validarChecklist() {
+            let ok = true;
+            
+            document.querySelectorAll('select[name^=resposta_]').forEach(c => {
+                if (c.value == '') ok = false;
+            });
+
+            document.querySelectorAll('textarea[name^=obs_]').forEach(t => {
+                if (t.value.trim() === '') ok = false;
+            });
+
+            let obsGerais = document.querySelector('textarea[name=observacoes_gerais]');
+            if (!obsGerais || obsGerais.value.trim() === '') ok = false;
+
+            let botao = document.querySelector('button[name=salvar]');
+            if (botao) {
+                botao.style.display = ok ? 'inline-block' : 'none';
+            }
         }
+
+        document.addEventListener('keyup', validarChecklist);
+        document.addEventListener('change', validarChecklist);
+    ");
+}
+        
 
         parent::add($this->form);
     }
@@ -256,13 +290,13 @@ class checkListForm extends TPage
 
             new TMessage('info', "Auditoria nº {$novoDoc} finalizada com sucesso!");
 
-        AdiantiCoreApplication::loadPage('HistoricoList&doc={$novoDoc}', 'onReload');
+            AdiantiCoreApplication::loadPage('HistoricoList', 'onReload', ['doc' => $novoDoc]);
 
-    } catch (Exception $e) {
-        new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
-        TTransaction::rollbackAll();
+        } catch (Exception $e) {
+            new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+            TTransaction::rollbackAll();
+        }
     }
-}
 
     public static function onOpenCurtain($param)
     {

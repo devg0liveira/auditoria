@@ -31,10 +31,9 @@ class HistoricoList extends TStandardList
 
         $this->setDatabase('auditoria');
         $this->setActiveRecord('ZCM010');
-        $this->setDefaultOrder('zcm__doc', 'desc');
+        $this->setDefaultOrder('zcm__data', 'desc');
         $this->setLimit(10);
 
-        // datagrid
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
         $this->datagrid->style = 'width: 100%';
@@ -72,12 +71,10 @@ class HistoricoList extends TStandardList
 
         $this->datagrid->createModel();
 
-        // paginação
         $this->pageNavigation = new TPageNavigation;
         $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
 
 
-        // painel
         $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
         $panel->add($this->datagrid);
         $panel->addFooter($this->pageNavigation);

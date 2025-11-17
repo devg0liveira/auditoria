@@ -8,6 +8,7 @@ use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
 use Adianti\Widget\Container\TVBox;
 use Adianti\Control\TAction;
+use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Base\TScript;
 use Adianti\Registry\TSession;
@@ -23,6 +24,9 @@ class inicioAuditoriaModal extends TPage
 
         $this->form = new BootstrapFormBuilder('form_inicio_auditoria');
         $this->form->setFormTitle('Iniciar Nova Auditoria');
+
+        $this->form->addAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left');
+
 
         $filiais = $this->carregarFiliais();
         $filial = new TCombo('filial');
@@ -51,11 +55,13 @@ class inicioAuditoriaModal extends TPage
         parent::add($container);
     }
 
-     public function onLoad($param = null)
-     {
-        
-     }
-    
+    public function onLoad($param = null) {}
+
+    public static function onReload($param = null)
+{
+   AdiantiCoreApplication::loadPage('inicioAuditoriaModal');
+}
+
 
     private function carregarFiliais()
     {
@@ -83,7 +89,6 @@ class inicioAuditoriaModal extends TPage
 
             TTransaction::close();
             return $items;
-
         } catch (Exception $e) {
             if (TTransaction::get()) {
                 TTransaction::rollback();
@@ -118,14 +123,13 @@ class inicioAuditoriaModal extends TPage
             TScript::create("
                 __adianti_load_page('index.php?class=checkListForm&method=onStart&filial={$param['filial']}&tipo={$param['tipo']}');
             ");
-
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
     }
 
-    
+
     public static function onOpenCurtain($param)
     {
         $page = \Adianti\Control\TWindow::create('Iniciar Nova Auditoria', 0.6, 0.5);

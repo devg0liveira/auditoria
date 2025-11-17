@@ -12,6 +12,7 @@ use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Base\TScript;
 use Adianti\Database\TTransaction;
 use Adianti\Core\AdiantiCoreApplication;
+use Adianti\Validator\TRequiredValidator;
 use Adianti\Wrapper\BootstrapFormBuilder;
 
 class IniciativaForm extends TPage
@@ -24,6 +25,9 @@ class IniciativaForm extends TPage
         $this->form = new BootstrapFormBuilder('form_iniciativa');
         $this->form->setFormTitle('Plano de Ação - Iniciativas de Melhoria');
         $this->form->style = 'padding:20px; max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1)';
+        
+        $this->form->addAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left');
+        
         $action_save = new TAction([$this, 'onSave']);
         $this->form->addAction('Salvar', $action_save, 'fa:save green');
     }
@@ -39,6 +43,8 @@ class IniciativaForm extends TPage
 
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
+
+            
 
             $sql = "
                 SELECT 
@@ -93,6 +99,7 @@ class IniciativaForm extends TPage
 
                 $acao   = new TText("acao_{$key}");
                 $acao->setSize('100%', 90);
+                $acao->addValidation('Ação', new TRequiredValidator);
 
                 $resp   = new TEntry("resp_{$key}");
                 $resp->setSize('100%');
@@ -105,9 +112,13 @@ class IniciativaForm extends TPage
 
                 $status = new TCombo("status_{$key}");
                 $status->addItems(['A' => 'Em Andamento', 'C' => 'Concluído']);
+                $status->setSize('100%');
+
 
                 $obs    = new TText("obs_{$key}");
                 $obs->setSize('100%', 70);
+                $acao->addValidation('Observação', new TRequiredValidator);
+
 
                 $acao->setValue($nc['ZCN_ACAO']);
                 $resp->setValue($nc['ZCN_RESP']);
@@ -115,6 +126,8 @@ class IniciativaForm extends TPage
                 $exec->setValue($this->formatDate($nc['ZCN_DATA_EXEC']));
                 $status->setValue($nc['ZCN_STATUS']);
                 $obs->setValue($nc['ZCN_OBS']);
+                $obs->setEditable(false);
+
 
                 $this->form->addFields([new TLabel('Ação corretiva <span style="color:red">*</span>')], [$acao]);
                 $this->form->addFields([new TLabel('Responsável <span style="color:red">*</span>'), new TLabel('Prazo')], [$resp, $prazo]);
@@ -129,32 +142,49 @@ class IniciativaForm extends TPage
             TTransaction::rollbackAll();
         }
     }
-
-   public static function onSave(array $param = [])
+public function onSave($param)
 {
     try {
-        if (empty($param)) {
-            throw new Exception('Nenhum dado recebido para salvar.');
-        }
+        TTransaction::open('auditoria');
+        $conn = TTransaction::get();
 
+        // 🔒 BLOQUEIO: impede salvar se já concluído
         $doc = $param['doc'] ?? null;
-        if (!$doc || trim($doc) === '') {
+
+        if (!$doc) {
             throw new Exception('Documento não informado.');
         }
 
-        TTransaction::open('auditoria');
+        $stmt = $conn->prepare("SELECT ZCN_STATUS FROM ZCN010 WHERE ZCN_DOC = ?");
+        $stmt->execute([$doc]);
+        $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($ncs as $nc) {
+            if ($nc['ZCN_STATUS'] == 'C') {
+                new TMessage('warning', 'O plano de ação já está concluído e não pode mais ser alterado.');
+                TTransaction::close();
+                AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+                return;
+            }
+        }
+
+        // 🔽 Daqui para baixo é o seu salvamento normal
+        if (empty($param)) {
+            throw new Exception('Nenhum dado recebido para salvar.');
+        }
 
         foreach ($param as $key => $value) {
             if (strpos($key, 'acao_') === 0) {
                 $parts = explode('_', $key);
                 $etapa = $parts[1] ?? null;
                 $seq   = $parts[2] ?? '001';
+
                 if (!$etapa) continue;
 
                 $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
-                             ->where('ZCN_ETAPA', '=', $etapa)
-                             ->where('ZCN_SEQ', '=', $seq)
-                             ->first();
+                    ->where('ZCN_ETAPA', '=', $etapa)
+                    ->where('ZCN_SEQ', '=', $seq)
+                    ->first();
 
                 if ($zcn) {
                     $zcn->ZCN_ACAO      = $param["acao_{$etapa}_{$seq}"] ?? '';
@@ -170,35 +200,34 @@ class IniciativaForm extends TPage
 
         TTransaction::close();
 
-
-     new TMessage('info', 'Plano de ação salvo com sucesso!');
-
+        new TMessage('info', 'Plano de ação salvo com sucesso!');
         AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
-
-    } catch (Exception $e) {
-        new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+    } 
+    catch (Exception $e) {
+        new TMessage('error', 'Erro ao salvar: ' .
+            $e->getMessage());
         TTransaction::rollbackAll();
     }
 }
 
 
     private static function toDbDate($date)
-{
-    $date = trim($date ?? '');
-    if ($date === '' || $date === null) {
-        return null; 
-    }
-
-    $parts = explode('/', $date);
-    if (count($parts) === 3) {
-        [$day, $month, $year] = $parts;
-        if (checkdate((int)$month, (int)$day, (int)$year)) {
-            return sprintf('%04d%02d%02d', $year, $month, $day);
+    {
+        $date = trim($date ?? '');
+        if ($date === '' || $date === null) {
+            return null;
         }
-    }
 
-    return null; 
-}
+        $parts = explode('/', $date);
+        if (count($parts) === 3) {
+            [$day, $month, $year] = $parts;
+            if (checkdate((int)$month, (int)$day, (int)$year)) {
+                return sprintf('%04d%02d%02d', $year, $month, $day);
+            }
+        }
+
+        return null;
+    }
 
     private function formatDate($date)
     {
@@ -208,5 +237,4 @@ class IniciativaForm extends TPage
         }
         return '';
     }
-
 }
