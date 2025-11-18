@@ -1,13 +1,15 @@
 <?php
 
+use Adianti\Control\TAction;
 use Adianti\Control\TPage;
 use Adianti\Widget\Container\TPanelGroup;
+use Adianti\Widget\Container\TVBox;
 use Adianti\Widget\Datagrid\TDataGrid;
 use Adianti\Widget\Datagrid\TDataGridColumn;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Form\TEntry;
+use Adianti\Widget\Form\TText;
 use Adianti\Widget\Form\TLabel;
-use Adianti\Widget\Form\TForm;
 use Adianti\Database\TTransaction;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
 use Adianti\Wrapper\BootstrapFormBuilder;
@@ -23,14 +25,15 @@ class AuditoriaView extends TPage
 
         $this->form = new BootstrapFormBuilder('form_auditoria_view');
         $this->form->setFormTitle('Detalhes da Auditoria');
+        $this->form->addHeaderAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left');
 
-        $doc      = new TEntry('zcm_doc');
-        $filial   = new TEntry('zcm_filial');
-        $tipo     = new TEntry('zcm_tipo');
+        $doc = new TEntry('zcm_doc');
+        $filial = new TEntry('zcm_filial');
+        $tipo = new TEntry('zcm_tipo');
         $datahora = new TEntry('zcm_datahora');
-        $usuario  = new TEntry('zcm_usuario');
-        $score    = new TEntry('score');
-        $obs      = new TEntry('zcm_obs');
+        $usuario = new TEntry('zcm_usuario');
+        $score = new TEntry('score');
+        $obs = new TText('zcm_obs'); 
 
         $doc->setEditable(false);
         $filial->setEditable(false);
@@ -39,6 +42,7 @@ class AuditoriaView extends TPage
         $usuario->setEditable(false);
         $score->setEditable(false);
         $obs->setEditable(false);
+        $obs->setSize('100%', 50);
 
         $this->form->addFields([new TLabel('Documento')], [$doc]);
         $this->form->addFields([new TLabel('Filial')], [$filial]);
@@ -48,16 +52,32 @@ class AuditoriaView extends TPage
         $this->form->addFields([new TLabel('Score')], [$score]);
         $this->form->addFields([new TLabel('Observações Gerais')], [$obs]);
 
-
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
+        $this->datagrid->style = 'width: 100%';
+        $this->datagrid->setHeight(320);
 
-        $col_etapa    = new TDataGridColumn('zcn_etapa', 'Etapa', 'left');
-        $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left');
-        $col_resposta = new TDataGridColumn('zcn_naoco', 'Resposta', 'center');
-        $col_score    = new TDataGridColumn('zcl_score', 'Score', 'center');
-        $col_obs      = new TDataGridColumn('zcn_obs', 'Observações', 'left');
+        $col_etapa = new TDataGridColumn('zcn_etapa', 'Etapa', 'left', '10%');
+        $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left', '30%');
+        $col_resposta = new TDataGridColumn('zcn_naoco', 'Conformidade', 'center', '15%');
+        $col_score = new TDataGridColumn('zcl_score', 'Pontos', 'right', '15%');
+        $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
 
+       $col_resposta->setTransformer(function($value) {
+    $value = trim($value);
+    return match($value) {
+        'NC' => '<span style="color:red;font-weight:bold">NC - Não Conforme</span>',
+        'P' => '<span style="color:orange;font-weight:bold">P - Parcial</span>',
+        'OP' => '<span style="color:blue;font-weight:bold">OP - Oportunidade de Melhoria</span>',
+        default => '<span style="color:gray">Conforme/Não visto</span>'
+    };
+});
+
+        $col_score->setTransformer(function($value) {
+            return number_format($value, 1, ',', '.');
+        });
+
+        // Adiciona colunas ao datagrid
         $this->datagrid->addColumn($col_etapa);
         $this->datagrid->addColumn($col_pergunta);
         $this->datagrid->addColumn($col_resposta);
@@ -68,9 +88,14 @@ class AuditoriaView extends TPage
 
         $panel = new TPanelGroup('Checklist da Auditoria');
         $panel->add($this->datagrid);
+        $panel->getBody()->style = 'overflow-x: auto';
 
-        parent::add($this->form);
-        parent::add($panel);
+        $container = new TVBox;
+        $container->style = 'width: 100%; max-width: 1200px; margin: 0 auto;';
+        $container->add($this->form);
+        $container->add($panel);
+        
+        parent::add($container);
     }
 
     public function onReload($param = null)
@@ -85,7 +110,7 @@ class AuditoriaView extends TPage
             $conn = TTransaction::get();
 
             $sql_cab = "
-                SELECT 
+                SELECT
                     ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
                 FROM ZCM010
                 WHERE ZCM_DOC = :doc AND D_E_L_E_T_ <> '*'
@@ -101,18 +126,19 @@ class AuditoriaView extends TPage
             $datahora = $this->formatarData($row_cab['ZCM_DATA']) . ' ' . $this->formatarHora($row_cab['ZCM_HORA']);
 
             $this->form->setData((object)[
-                'zcm_doc'      => trim($row_cab['ZCM_DOC']),
-                'zcm_filial'   => trim($row_cab['ZCM_FILIAL']),
-                'zcm_tipo'     => trim($row_cab['ZCM_TIPO']),
+                'zcm_doc' => trim($row_cab['ZCM_DOC']),
+                'zcm_filial' => trim($row_cab['ZCM_FILIAL']),
+                'zcm_tipo' => trim($row_cab['ZCM_TIPO']),
                 'zcm_datahora' => $datahora,
-                'zcm_usuario'  => trim($row_cab['ZCM_USUGIR']),
-                'zcm_obs'      => trim($row_cab['ZCM_OBS'] ?? ''),
-                'score'        => $this->calcularScore($conn, $doc, trim($row_cab['ZCM_TIPO']))
+                'zcm_usuario' => trim($row_cab['ZCM_USUGIR']),
+                'zcm_obs' => trim($row_cab['ZCM_OBS'] ?? ''),
+                'score' => number_format($this->calcularScore($conn, $doc, trim($row_cab['ZCM_TIPO'])), 1, ',', '.')
             ]);
 
             $this->datagrid->clear();
+
             $sql_check = "
-                SELECT 
+                SELECT
                     cn.ZCN_DOC, cl.ZCL_ETAPA, cj.ZCJ_DESCRI, cn.ZCN_NAOCO, cl.ZCL_SCORE, cn.ZCN_OBS
                 FROM ZCN010 cn
                 INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo AND cl.D_E_L_E_T_ <> '*'
@@ -126,12 +152,11 @@ class AuditoriaView extends TPage
 
             foreach ($results as $row) {
                 $item = (object)[
-                    'zcn_doc'    => trim($row['ZCN_DOC']),
-                    'zcn_etapa'  => trim($row['ZCL_ETAPA'] ?? ''),
+                    'zcn_etapa' => trim($row['ZCL_ETAPA'] ?? ''),
                     'zcj_descri' => trim($row['ZCJ_DESCRI'] ?? ''),
-                    'zcn_naoco'  => trim($row['ZCN_NAOCO'] ?? ''),
-                    'zcl_score'  => (float)$row['ZCL_SCORE'],
-                    'zcn_obs'    => trim($row['ZCN_OBS'] ?? '')
+                    'zcn_naoco' => trim($row['ZCN_NAOCO'] ?? ''),
+                    'zcl_score' => (float)$row['ZCL_SCORE'],
+                    'zcn_obs' => trim($row['ZCN_OBS'] ?? '')
                 ];
                 $this->datagrid->addItem($item);
             }
@@ -166,5 +191,4 @@ class AuditoriaView extends TPage
     {
         return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
     }
-
 }

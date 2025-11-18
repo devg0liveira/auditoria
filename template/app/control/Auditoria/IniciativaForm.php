@@ -9,9 +9,9 @@ use Adianti\Widget\Form\TDate;
 use Adianti\Widget\Form\TCombo;
 use Adianti\Widget\Form\THidden;
 use Adianti\Widget\Dialog\TMessage;
-use Adianti\Widget\Base\TScript;
 use Adianti\Database\TTransaction;
 use Adianti\Core\AdiantiCoreApplication;
+use Adianti\Validator\TMinLengthValidator;
 use Adianti\Validator\TRequiredValidator;
 use Adianti\Wrapper\BootstrapFormBuilder;
 
@@ -32,7 +32,7 @@ class IniciativaForm extends TPage
         $this->form->addAction('Salvar', $action_save, 'fa:save green');
     }
 
-    public function onLoad(array $param)
+    public function onEdit(array $param)
     {
 
         try {
@@ -100,10 +100,13 @@ class IniciativaForm extends TPage
                 $acao   = new TText("acao_{$key}");
                 $acao->setSize('100%', 90);
                 $acao->addValidation('Ação', new TRequiredValidator);
+                $acao->addValidation('Observação', new TMinLengthValidator(1));
 
                 $resp   = new TEntry("resp_{$key}");
                 $resp->setSize('100%');
-
+                $resp->addValidation('Observação', new TRequiredValidator);
+                $resp->addValidation('Observação', new TMinLengthValidator(1));
+                
                 $prazo  = new TDate("prazo_{$key}");
                 $prazo->setMask('dd/mm/yyyy');
 
@@ -117,7 +120,6 @@ class IniciativaForm extends TPage
 
                 $obs    = new TText("obs_{$key}");
                 $obs->setSize('100%', 70);
-                $acao->addValidation('Observação', new TRequiredValidator);
 
 
                 $acao->setValue($nc['ZCN_ACAO']);
@@ -148,7 +150,6 @@ public function onSave($param)
         TTransaction::open('auditoria');
         $conn = TTransaction::get();
 
-        // 🔒 BLOQUEIO: impede salvar se já concluído
         $doc = $param['doc'] ?? null;
 
         if (!$doc) {
@@ -168,7 +169,6 @@ public function onSave($param)
             }
         }
 
-        // 🔽 Daqui para baixo é o seu salvamento normal
         if (empty($param)) {
             throw new Exception('Nenhum dado recebido para salvar.');
         }

@@ -13,6 +13,7 @@ use Adianti\Widget\Datagrid\TDataGridColumn;
 use Adianti\Widget\Datagrid\TDataGridAction;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Database\TTransaction;
+use Adianti\Widget\Base\TElement;
 use Adianti\Widget\Container\TVBox;
 use Adianti\Widget\Datagrid\TPageNavigation;
 use Adianti\Widget\Util\TXMLBreadCrumb;
@@ -64,7 +65,7 @@ class HistoricoList extends TStandardList
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
 
-        $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onLoad'], ['doc' => '{ZCM_DOC}']);
+        $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onEdit'], ['doc' => '{ZCM_DOC}']);
         $action_iniciativa->setLabel('Iniciativa');
         $action_iniciativa->setImage('fa:lightbulb yellow');
         $this->datagrid->addAction($action_iniciativa);
@@ -78,7 +79,13 @@ class HistoricoList extends TStandardList
         $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
         $panel->add($this->datagrid);
         $panel->addFooter($this->pageNavigation);
+/*
+        $wrapper = new TElement('div');
+        $wrapper->class = 'table-responsive';
+        $wrapper->add($this->datagrid);
 
+        $panel->add($wrapper);
+*/
         $panel->addHeaderActionLink(
             'Nova Auditoria',
             new TAction(['inicioAuditoriaModal', 'onLoad']),
@@ -92,7 +99,6 @@ class HistoricoList extends TStandardList
         try {
             TTransaction::open($this->database);
 
-            // carrega objetos
             $repository = new TRepository($this->activeRecord);
             $limit      = $this->limit;
 
@@ -110,7 +116,6 @@ class HistoricoList extends TStandardList
                 }
             }
 
-            // paginação
             $criteria->resetProperties();
             $count = $repository->count($criteria);
             $this->pageNavigation->setCount($count);
