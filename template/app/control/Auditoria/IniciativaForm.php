@@ -100,12 +100,12 @@ class IniciativaForm extends TPage
                 $acao   = new TText("acao_{$key}");
                 $acao->setSize('100%', 90);
                 $acao->addValidation('Ação', new TRequiredValidator);
-                $acao->addValidation('Observação', new TMinLengthValidator(1));
+                $acao->addValidation('Observação', new TMinLengthValidator, array(1));
 
                 $resp   = new TEntry("resp_{$key}");
                 $resp->setSize('100%');
                 $resp->addValidation('Observação', new TRequiredValidator);
-                $resp->addValidation('Observação', new TMinLengthValidator(1));
+                $resp->addValidation('Observação', new TMinLengthValidator, array(1));
                 
                 $prazo  = new TDate("prazo_{$key}");
                 $prazo->setMask('dd/mm/yyyy');

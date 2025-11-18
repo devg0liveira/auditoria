@@ -68,6 +68,7 @@ class HistoricoList extends TStandardList
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onEdit'], ['doc' => '{ZCM_DOC}']);
         $action_iniciativa->setLabel('Iniciativa');
         $action_iniciativa->setImage('fa:lightbulb yellow');
+        $action_iniciativa->setDisplayCondition([$this, 'deveExibirIniciativa']);
         $this->datagrid->addAction($action_iniciativa);
 
         $this->datagrid->createModel();
@@ -75,17 +76,10 @@ class HistoricoList extends TStandardList
         $this->pageNavigation = new TPageNavigation;
         $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
 
-
         $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
         $panel->add($this->datagrid);
         $panel->addFooter($this->pageNavigation);
-/*
-        $wrapper = new TElement('div');
-        $wrapper->class = 'table-responsive';
-        $wrapper->add($this->datagrid);
 
-        $panel->add($wrapper);
-*/
         $panel->addHeaderActionLink(
             'Nova Auditoria',
             new TAction(['inicioAuditoriaModal', 'onLoad']),
@@ -94,6 +88,37 @@ class HistoricoList extends TStandardList
 
         parent::add($panel);
     }
+
+    private function planoEstaConcluido($documento)
+    {
+        try {
+            TTransaction::open('auditoria');
+            $conn = TTransaction::get();
+            
+            $sql = "SELECT COUNT(*) as total 
+                    FROM ZCN010 
+                    WHERE ZCN_DOC = :doc 
+                    AND ZCN_STATUS <> 'C' 
+                    AND D_E_L_E_T_ <> '*'";
+            
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([':doc' => $documento]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            TTransaction::close();
+            
+            return ($result['total'] == 0);
+        } catch (Exception $e) {
+            TTransaction::rollback();
+            return false;
+        }
+    }
+
+    public function deveExibirIniciativa($object)
+    {
+        return !$this->planoEstaConcluido($object->ZCM_DOC);
+    }
+
     public function onReload($param = null)
     {
         try {
@@ -128,6 +153,7 @@ class HistoricoList extends TStandardList
             TTransaction::rollback();
         }
     }
+
     public function formatarData($value)
     {
         if ($value && strlen($value) === 8 && is_numeric($value)) {
