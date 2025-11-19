@@ -240,13 +240,13 @@ class checkListForm extends TPage
 
             $zcm->ZCM_OBS = trim($param['observacoes_gerais'] ?? '') ?: null;
 
-            $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
+            $etapas_info = ZCL010::where('ZCL_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
-                ->getIndexedArray('ZCL_ETAPA', 'ZCL_ETAPA');
+                ->getIndexedArray('ZCL_ETAPA');
 
             $criteria = new TCriteria;
             $criteria->add(new TFilter('D_E_L_E_T_', '<>', '*'));
-            $criteria->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($etapas_tipo)));
+            $criteria->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($etapas_info)));
             $criteria->setProperty('order', 'ZCJ_ETAPA');
 
             $repo = new TRepository('ZCJ010');
@@ -274,6 +274,12 @@ class checkListForm extends TPage
 
                     if (in_array($resposta, ['NC', 'P', 'OP'])) {
                         $zcn->ZCN_NAOCO = $resposta;
+
+                        $etapa_info = $etapas_info[$etapa] ?? null;
+                        if ($etapa_info && property_exists($etapa_info, 'ZCL_SCORE')) {
+                            $zcl_score = (float) $etapa_info->ZCL_SCORE;
+                            $zcn->ZCN_SCORE = 120 - $zcl_score;
+                        }
                     }
 
                     $zcn->store();

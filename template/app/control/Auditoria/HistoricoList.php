@@ -3,9 +3,9 @@
 use Adianti\Base\AdiantiStandardListTrait;
 use Adianti\Base\TStandardList;
 use Adianti\Control\TAction;
-use Adianti\Control\TPage;
 use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Database\TCriteria;
+use Adianti\Database\TFilter;
 use Adianti\Database\TRepository;
 use Adianti\Widget\Container\TPanelGroup;
 use Adianti\Widget\Datagrid\TDataGrid;
@@ -13,16 +13,19 @@ use Adianti\Widget\Datagrid\TDataGridColumn;
 use Adianti\Widget\Datagrid\TDataGridAction;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Database\TTransaction;
-use Adianti\Widget\Base\TElement;
-use Adianti\Widget\Container\TVBox;
+use Adianti\Registry\TSession;
 use Adianti\Widget\Datagrid\TPageNavigation;
-use Adianti\Widget\Util\TXMLBreadCrumb;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
+use Adianti\Wrapper\BootstrapFormBuilder;
+use Adianti\Widget\Form\TDate;
+use Adianti\Widget\Form\TEntry;
+use Adianti\Widget\Form\TLabel;
 
 class HistoricoList extends TStandardList
 {
     protected $datagrid;
     protected $pageNavigation;
+    protected $form;
 
     use AdiantiStandardListTrait;
 
@@ -34,6 +37,24 @@ class HistoricoList extends TStandardList
         $this->setActiveRecord('ZCM010');
         $this->setDefaultOrder('zcm__data', 'desc');
         $this->setLimit(10);
+
+        $this->form = new BootstrapFormBuilder('form_filtro_historico');
+        $this->form->setFormTitle('Filtro');
+
+        $data_de  = new TDate('data_de');
+        $data_ate = new TDate('data_ate');
+        $filial   = new TEntry('filial');
+        $doc      = new TEntry('doc');
+
+        $data_de->setMask('dd/mm/yyyy');
+        $data_ate->setMask('dd/mm/yyyy');
+
+        $this->form->addFields([new TLabel('Data de')],  [$data_de]);
+        $this->form->addFields([new TLabel('Data até')], [$data_ate]);
+        $this->form->addFields([new TLabel('Filial')],   [$filial]);
+        $this->form->addFields([new TLabel('Documento')], [$doc]);
+
+        $this->form->addAction('Pesquisar', new TAction([$this, 'onSearch']), 'fa:search blue');
 
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
         $this->datagrid->disableDefaultClick();
@@ -77,6 +98,7 @@ class HistoricoList extends TStandardList
         $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
 
         $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
+        $panel->add($this->form);
         $panel->add($this->datagrid);
         $panel->addFooter($this->pageNavigation);
 
@@ -89,25 +111,40 @@ class HistoricoList extends TStandardList
         parent::add($panel);
     }
 
-    private function planoEstaConcluido($documento)
+    public function onSearch($param = null)
+    {
+        $data = $this->form->getData();
+
+        TSession::setValue('hist_data_de', $data->data_de);
+        TSession::setValue('hist_data_ate', $data->data_ate);
+        TSession::setValue('hist_filial', $data->filial);
+        TSession::setValue('hist_doc', $data->doc);
+
+        $this->form->setData($data);
+
+        $this->onReload();
+    }
+
+    private function planoEstaPendente($documento)
     {
         try {
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
-            
+
             $sql = "SELECT COUNT(*) as total 
                     FROM ZCN010 
                     WHERE ZCN_DOC = :doc 
-                    AND ZCN_STATUS <> 'C' 
+                    AND ZCN_NAOCO IN ('NC', 'P', 'OP')
+                    AND (ZCN_STATUS IS NULL OR ZCN_STATUS <> 'C')
                     AND D_E_L_E_T_ <> '*'";
-            
+
             $stmt = $conn->prepare($sql);
             $stmt->execute([':doc' => $documento]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             TTransaction::close();
-            
-            return ($result['total'] == 0);
+
+            return ($result['total'] > 0);
         } catch (Exception $e) {
             TTransaction::rollback();
             return false;
@@ -116,7 +153,7 @@ class HistoricoList extends TStandardList
 
     public function deveExibirIniciativa($object)
     {
-        return !$this->planoEstaConcluido($object->ZCM_DOC);
+        return $this->planoEstaPendente($object->ZCM_DOC);
     }
 
     public function onReload($param = null)
@@ -127,11 +164,28 @@ class HistoricoList extends TStandardList
             $repository = new TRepository($this->activeRecord);
             $limit      = $this->limit;
 
-            $criteria = $this->criteria ?? new TCriteria;
+            $criteria = new TCriteria;
+
+            if ($de = TSession::getValue('hist_data_de')) {
+                $criteria->add(new TFilter('ZCM_DATA', '>=', str_replace('/', '', implode('', array_reverse(explode('/', $de))))));
+            }
+
+            if ($ate = TSession::getValue('hist_data_ate')) {
+                $criteria->add(new TFilter('ZCM_DATA', '<=', str_replace('/', '', implode('', array_reverse(explode('/', $ate))))));
+            }
+
+            if ($filial = TSession::getValue('hist_filial')) {
+                $criteria->add(new TFilter('ZCM_FILIAL', '=', $filial));
+            }
+
+            if ($doc = TSession::getValue('hist_doc')) {
+                $criteria->add(new TFilter('ZCM_DOC', 'like', "%$doc%"));
+            }
+
             $criteria->setProperties($param);
             $criteria->setProperty('limit', $limit);
 
-            $objects = $repository->load($criteria, FALSE);
+            $objects = $repository->load($criteria, false);
 
             $this->datagrid->clear();
 

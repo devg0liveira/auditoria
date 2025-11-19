@@ -77,7 +77,7 @@ class AuditoriaView extends TPage
             return number_format($value, 1, ',', '.');
         });
 
-        // Adiciona colunas ao datagrid
+        // Adiciona colunas ao datagridzzz
         $this->datagrid->addColumn($col_etapa);
         $this->datagrid->addColumn($col_pergunta);
         $this->datagrid->addColumn($col_resposta);
