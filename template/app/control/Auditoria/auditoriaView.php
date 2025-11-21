@@ -77,7 +77,6 @@ class AuditoriaView extends TPage
             return number_format($value, 1, ',', '.');
         });
 
-        // Adiciona colunas ao datagridzzz
         $this->datagrid->addColumn($col_etapa);
         $this->datagrid->addColumn($col_pergunta);
         $this->datagrid->addColumn($col_resposta);
@@ -132,7 +131,6 @@ class AuditoriaView extends TPage
                 'zcm_datahora' => $datahora,
                 'zcm_usuario' => trim($row_cab['ZCM_USUGIR']),
                 'zcm_obs' => trim($row_cab['ZCM_OBS'] ?? ''),
-                'score' => number_format($this->calcularScore($conn, $doc, trim($row_cab['ZCM_TIPO'])), 1, ',', '.')
             ]);
 
             $this->datagrid->clear();
@@ -155,7 +153,7 @@ class AuditoriaView extends TPage
                     'zcn_etapa' => trim($row['ZCL_ETAPA'] ?? ''),
                     'zcj_descri' => trim($row['ZCJ_DESCRI'] ?? ''),
                     'zcn_naoco' => trim($row['ZCN_NAOCO'] ?? ''),
-                    'zcl_score' => (float)$row['ZCL_SCORE'],
+                    'zcl_score' => (int)$row['ZCL_SCORE'],
                     'zcn_obs' => trim($row['ZCN_OBS'] ?? '')
                 ];
                 $this->datagrid->addItem($item);
@@ -179,7 +177,7 @@ class AuditoriaView extends TPage
         $stmt = $conn->prepare($sql_score);
         $stmt->execute([':doc' => $doc, ':tipo' => $tipo]);
         $score_row = $stmt->fetch();
-        return (float)($score_row['total_score'] ?? 0);
+        return (int)($score_row['total_score'] ?? 0);
     }
 
     private function formatarData($data)

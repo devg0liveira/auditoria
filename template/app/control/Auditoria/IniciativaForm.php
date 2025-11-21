@@ -34,7 +34,6 @@ class IniciativaForm extends TPage
 
     public function onEdit(array $param)
     {
-
         try {
             $doc = $param['doc'] ?? null;
             if (!$doc || trim($doc) === '') {
@@ -43,8 +42,6 @@ class IniciativaForm extends TPage
 
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
-
-            
 
             $sql = "
                 SELECT 
@@ -97,30 +94,30 @@ class IniciativaForm extends TPage
                     new TLabel("Tipo: <span style='color:red; font-weight:bold'>{$nc['ZCN_NAOCO']}</span>")
                 ]);
 
-                $acao   = new TText("acao_{$key}");
-                $acao->setSize('100%', 90);
-                $acao->addValidation('Ação', new TRequiredValidator);
-                $acao->addValidation('Observação', new TMinLengthValidator, array(1));
-
-                $resp   = new TEntry("resp_{$key}");
-                $resp->setSize('100%');
-                $resp->addValidation('Observação', new TRequiredValidator);
-                $resp->addValidation('Observação', new TMinLengthValidator, array(1));
                 
-                $prazo  = new TDate("prazo_{$key}");
-                $prazo->setMask('dd/mm/yyyy');
+                $acao = new TText("acao_{$key}");
+                $acao->setSize('100%', 90);
+                $acao->addValidation('Ação corretiva', new TRequiredValidator);
+                $acao->addValidation('Ação corretiva', new TMinLengthValidator, array(5));
 
-                $exec   = new TDate("exec_{$key}");
+                $resp = new TEntry("resp_{$key}");
+                $resp->setSize('100%');
+                $resp->addValidation('Responsável', new TRequiredValidator);
+                $resp->addValidation('Responsável', new TMinLengthValidator, array(3));
+                
+                $prazo = new TDate("prazo_{$key}");
+                $prazo->setMask('dd/mm/yyyy');
+                $prazo->addValidation('Prazo', new TRequiredValidator);
+
+                $exec = new TDate("exec_{$key}");
                 $exec->setMask('dd/mm/yyyy');
 
                 $status = new TCombo("status_{$key}");
                 $status->addItems(['A' => 'Em Andamento', 'C' => 'Concluído']);
                 $status->setSize('100%');
 
-
-                $obs    = new TText("obs_{$key}");
+                $obs = new TText("obs_{$key}");
                 $obs->setSize('100%', 70);
-
 
                 $acao->setValue($nc['ZCN_ACAO']);
                 $resp->setValue($nc['ZCN_RESP']);
@@ -130,9 +127,8 @@ class IniciativaForm extends TPage
                 $obs->setValue($nc['ZCN_OBS']);
                 $obs->setEditable(false);
 
-
                 $this->form->addFields([new TLabel('Ação corretiva <span style="color:red">*</span>')], [$acao]);
-                $this->form->addFields([new TLabel('Responsável <span style="color:red">*</span>'), new TLabel('Prazo')], [$resp, $prazo]);
+                $this->form->addFields([new TLabel('Responsável <span style="color:red">*</span>'), new TLabel('Prazo <span style="color:red">*</span>')], [$resp, $prazo]);
                 $this->form->addFields([new TLabel('Data Execução'), new TLabel('Status')], [$exec, $status]);
                 $this->form->addFields([new TLabel('Observações')], [$obs]);
             }
@@ -144,72 +140,104 @@ class IniciativaForm extends TPage
             TTransaction::rollbackAll();
         }
     }
-public function onSave($param)
-{
-    try {
-        TTransaction::open('auditoria');
-        $conn = TTransaction::get();
 
-        $doc = $param['doc'] ?? null;
+    public function onSave($param)
+    {
+        try {
+            $this->form->validate();
 
-        if (!$doc) {
-            throw new Exception('Documento não informado.');
-        }
+            TTransaction::open('auditoria');
+            $conn = TTransaction::get();
 
-        $stmt = $conn->prepare("SELECT ZCN_STATUS FROM ZCN010 WHERE ZCN_DOC = ?");
-        $stmt->execute([$doc]);
-        $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $doc = $param['doc'] ?? null;
 
-        foreach ($ncs as $nc) {
-            if ($nc['ZCN_STATUS'] == 'C') {
-                new TMessage('warning', 'O plano de ação já está concluído e não pode mais ser alterado.');
-                TTransaction::close();
-                AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
-                return;
+            if (!$doc) {
+                throw new Exception('Documento não informado.');
             }
-        }
 
-        if (empty($param)) {
-            throw new Exception('Nenhum dado recebido para salvar.');
-        }
+            $stmt = $conn->prepare("SELECT ZCN_STATUS FROM ZCN010 WHERE ZCN_DOC = ? AND D_E_L_E_T_ <> '*'");
+            $stmt->execute([$doc]);
+            $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($param as $key => $value) {
-            if (strpos($key, 'acao_') === 0) {
-                $parts = explode('_', $key);
-                $etapa = $parts[1] ?? null;
-                $seq   = $parts[2] ?? '001';
-
-                if (!$etapa) continue;
-
-                $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
-                    ->where('ZCN_ETAPA', '=', $etapa)
-                    ->where('ZCN_SEQ', '=', $seq)
-                    ->first();
-
-                if ($zcn) {
-                    $zcn->ZCN_ACAO      = $param["acao_{$etapa}_{$seq}"] ?? '';
-                    $zcn->ZCN_RESP      = $param["resp_{$etapa}_{$seq}"] ?? '';
-                    $zcn->ZCN_PRAZO     = self::toDbDate($param["prazo_{$etapa}_{$seq}"] ?? null);
-                    $zcn->ZCN_DATA_EXEC = self::toDbDate($param["exec_{$etapa}_{$seq}"] ?? null);
-                    $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
-                    $zcn->ZCN_OBS       = $param["obs_{$etapa}_{$seq}"] ?? '';
-                    $zcn->store();
+            foreach ($ncs as $nc) {
+                if ($nc['ZCN_STATUS'] == 'C') {
+                    new TMessage('warning', 'O plano de ação já está concluído e não pode mais ser alterado.');
+                    TTransaction::close();
+                    AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+                    return;
                 }
             }
+
+            if (empty($param)) {
+                throw new Exception('Nenhum dado recebido para salvar.');
+            }
+
+            $erros = [];
+
+            foreach ($param as $key => $value) {
+                if (strpos($key, 'acao_') === 0) {
+                    $parts = explode('_', $key);
+                    $etapa = $parts[1] ?? null;
+                    $seq   = $parts[2] ?? '001';
+
+                    if (!$etapa) continue;
+
+                    $acao = trim($param["acao_{$etapa}_{$seq}"] ?? '');
+                    $resp = trim($param["resp_{$etapa}_{$seq}"] ?? '');
+                    $prazo = trim($param["prazo_{$etapa}_{$seq}"] ?? '');
+
+                    if (empty($acao)) {
+                        $erros[] = "Etapa {$etapa}: Ação corretiva é obrigatória.";
+                    } elseif (strlen($acao) < 10) {
+                        $erros[] = "Etapa {$etapa}: Ação corretiva deve ter no mínimo 5 caracteres.";
+                    }
+
+                    if (empty($resp)) {
+                        $erros[] = "Etapa {$etapa}: Responsável é obrigatório.";
+                    } elseif (strlen($resp) < 3) {
+                        $erros[] = "Etapa {$etapa}: Responsável deve ter no mínimo 3 caracteres.";
+                    }
+
+                    if (empty($prazo)) {
+                        $erros[] = "Etapa {$etapa}: Prazo é obrigatório.";
+                    }
+
+                    if (!empty($erros)) {
+                        continue;
+                    }
+
+                    $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
+                        ->where('ZCN_ETAPA', '=', $etapa)
+                        ->where('ZCN_SEQ', '=', $seq)
+                        ->first();
+
+                    if ($zcn) {
+                        $zcn->ZCN_ACAO      = $acao;
+                        $zcn->ZCN_RESP      = $resp;
+                        $zcn->ZCN_PRAZO     = self::toDbDate($prazo);
+                        $zcn->ZCN_DATA_EXEC = self::toDbDate(trim($param["exec_{$etapa}_{$seq}"] ?? ''));
+                        $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
+                        $zcn->ZCN_OBS       = trim($param["obs_{$etapa}_{$seq}"] ?? '');
+                        $zcn->store();
+                    }
+                }
+            }
+
+            if (!empty($erros)) {
+                TTransaction::rollback();
+                throw new Exception("Erros de validação:\n" . implode("\n", $erros));
+            }
+
+            TTransaction::close();
+
+            new TMessage('info', 'Plano de ação salvo com sucesso!');
+            AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+        } 
+        catch (Exception $e) {
+            new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+            TTransaction::rollbackAll();
         }
-
-        TTransaction::close();
-
-        new TMessage('info', 'Plano de ação salvo com sucesso!');
-        AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
-    } 
-    catch (Exception $e) {
-        new TMessage('error', 'Erro ao salvar: ' .
-            $e->getMessage());
-        TTransaction::rollbackAll();
     }
-}
-
 
     private static function toDbDate($date)
     {

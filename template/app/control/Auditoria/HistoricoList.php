@@ -54,6 +54,7 @@ class HistoricoList extends TStandardList
         $this->form->addFields([new TLabel('Filial')],   [$filial]);
         $this->form->addFields([new TLabel('Documento')], [$doc]);
 
+        $this->form->addAction('Apagar', new TAction([$this, 'onClear']), 'fa:eraser red');
         $this->form->addAction('Pesquisar', new TAction([$this, 'onSearch']), 'fa:search blue');
 
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
@@ -122,6 +123,12 @@ class HistoricoList extends TStandardList
 
         $this->form->setData($data);
 
+        $this->onReload();
+    }
+
+    public function onClear($param = null)
+    {
+        $this->form->clear();
         $this->onReload();
     }
 
