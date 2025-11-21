@@ -50,7 +50,7 @@ class checkListForm extends TPage
             $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->first();
-            
+
             if (!$tipoObj) {
                 throw new Exception('Tipo não encontrado.');
             }
@@ -66,7 +66,6 @@ class checkListForm extends TPage
             TTransaction::close();
 
             $this->montarFormulario($tipoObj, $tipo, $perguntas, $dados_salvos);
-
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
@@ -82,7 +81,7 @@ class checkListForm extends TPage
         $criteria->setProperty('order', 'ZCJ010.ZCJ_ETAPA');
 
         $repo = new TRepository('ZCJ010');
-        
+
         $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
             ->where('D_E_L_E_T_', '<>', '*')
             ->load();
@@ -135,7 +134,7 @@ class checkListForm extends TPage
             $zcm = ZCM010::where('ZCM_DOC', '=', $view_data['doc'])
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->first();
-            
+
             if ($zcm) {
                 $dados['obs_gerais'] = $zcm->ZCM_OBS ?? '';
             }
@@ -275,20 +274,19 @@ class checkListForm extends TPage
 
             new TMessage('info', "Auditoria nº {$novoDoc} finalizada com sucesso!");
             AdiantiCoreApplication::loadPage('HistoricoList', 'onReload', ['doc' => $novoDoc]);
-
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
             TTransaction::rollbackAll();
         }
     }
 
-    private static function gerarNovoDocumento()
+    private  function gerarNovoDocumento()
     {
         $ultimo = ZCM010::orderBy('ZCM_DOC', 'desc')->first();
         return $ultimo ? str_pad(((int) $ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
     }
 
-    private static function salvarCabecalho($doc, $tipo, $param)
+    private  function salvarCabecalho($doc, $tipo, $param)
     {
         $zcm = new ZCM010;
         $zcm->ZCM_DOC     = $doc;
@@ -301,7 +299,7 @@ class checkListForm extends TPage
         $zcm->store();
     }
 
-    private static function buscarScoresPorEtapa($tipo)
+    private  function buscarScoresPorEtapa($tipo)
     {
         $etapas = ZCL010::where('ZCL_TIPO', '=', $tipo)
             ->where('D_E_L_E_T_', '<>', '*')
@@ -314,7 +312,7 @@ class checkListForm extends TPage
         return $scores;
     }
 
-    private static function salvarRespostas($doc, $tipo, $param, $scores_por_etapa)
+    private  function salvarRespostas($doc, $tipo, $param, $scores_por_etapa)
     {
         $perguntas = ZCJ010::where('ZCJ_ETAPA', 'IN', array_keys($scores_por_etapa))
             ->where('D_E_L_E_T_', '<>', '*')
@@ -341,14 +339,13 @@ class checkListForm extends TPage
             $zcn->ZCN_HORA    = $hora;
             $zcn->ZCN_USUARIO = $usuario;
             $zcn->ZCN_OBS     = trim($param["obs_{$etapa}"] ?? '') ?: null;
-           
-           
-            
+
+
+
             //ACHO QUE RESOLVI AAAAAAAAAAAAAAAAAAAAAAAA
-             
             if (in_array($resposta, ['NC', 'P', 'OP'])) {
                 $zcn->ZCN_NAOCO = $resposta;
-                $zcn->ZCN_SCORE =($scores_por_etapa[$etapa] ?? 0);
+                $zcn->ZCN_SCORE = ($scores_por_etapa[$etapa] ?? 0);
             }
 
             $zcn->store();
@@ -358,7 +355,7 @@ class checkListForm extends TPage
         return $salvo;
     }
 
-    public static function onOpenCurtain($param)
+    public  function onOpenCurtain($param)
     {
         $win = TWindow::create('CheckList de Auditoria', 0.9, 0.9);
         $win->removePadding();

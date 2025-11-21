@@ -67,7 +67,7 @@ class HistoricoList extends TStandardList
         $col_data     = new TDataGridColumn('ZCM_DATA', 'Data', 'center', '10%');
         $col_hora     = new TDataGridColumn('ZCM_HORA', 'Hora', 'center', '8%');
         $col_usuario  = new TDataGridColumn('ZCM_USUGIR', 'Usuário', 'left', '12%');
-        $col_score    = new TDataGridColumn('ZCM_SCORE', 'Score', 'center', '10%');
+        $col_score    = new TDataGridColumn('score_calculado', 'Score', 'center', '10%');
         $col_obs      = new TDataGridColumn('ZCM_OBS', 'Observações', 'left', '20%');
 
         $col_data->setTransformer([$this, 'formatarData']);
@@ -132,10 +132,37 @@ class HistoricoList extends TStandardList
         $this->onReload();
     }
 
+    private function calcularScore($documento, $tipo)
+    {
+        try {
+            $conn = TTransaction::get();
+
+            $sql = "
+                SELECT SUM(cl.ZCL_SCORE) as total_perdido
+                FROM ZCN010 cn
+                INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA 
+                    AND cl.ZCL_TIPO = :tipo 
+                    AND cl.D_E_L_E_T_ <> '*'
+                WHERE cn.ZCN_DOC = :doc 
+                    AND cn.ZCN_NAOCO IN ('NC', 'P', 'OP')
+                    AND cn.D_E_L_E_T_ <> '*'
+            ";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([':doc' => $documento, ':tipo' => $tipo]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $total_perdido = (int)($result['total_perdido'] ?? 0);
+            return 120 - $total_perdido;
+
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
     private function planoEstaPendente($documento)
     {
         try {
-            TTransaction::open('auditoria');
             $conn = TTransaction::get();
 
             $sql = "SELECT COUNT(*) as total 
@@ -149,11 +176,8 @@ class HistoricoList extends TStandardList
             $stmt->execute([':doc' => $documento]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            TTransaction::close();
-
             return ($result['total'] > 0);
         } catch (Exception $e) {
-            TTransaction::rollback();
             return false;
         }
     }
@@ -198,6 +222,11 @@ class HistoricoList extends TStandardList
 
             if ($objects) {
                 foreach ($objects as $object) {
+                    $object->score_calculado = $this->calcularScore(
+                        trim($object->ZCM_DOC), 
+                        trim($object->ZCM_TIPO)
+                    );
+                    
                     $this->datagrid->addItem($object);
                 }
             }
@@ -230,6 +259,8 @@ class HistoricoList extends TStandardList
         }
         return $value;
     }
+
+
 
     public function onView($param)
     {
