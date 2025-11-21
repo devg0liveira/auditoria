@@ -33,7 +33,7 @@ class AuditoriaView extends TPage
         $datahora = new TEntry('zcm_datahora');
         $usuario = new TEntry('zcm_usuario');
         $score = new TEntry('score');
-        $obs = new TText('zcm_obs'); 
+        $obs = new TText('zcm_obs');
 
         $doc->setEditable(false);
         $filial->setEditable(false);
@@ -63,17 +63,17 @@ class AuditoriaView extends TPage
         $col_score = new TDataGridColumn('zcl_score', 'Pontos', 'right', '15%');
         $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
 
-       $col_resposta->setTransformer(function($value) {
-    $value = trim($value);
-    return match($value) {
-        'NC' => '<span style="color:red;font-weight:bold">NC - Não Conforme</span>',
-        'P' => '<span style="color:orange;font-weight:bold">P - Parcial</span>',
-        'OP' => '<span style="color:blue;font-weight:bold">OP - Oportunidade de Melhoria</span>',
-        default => '<span style="color:gray">Conforme/Não visto</span>'
-    };
-});
+        $col_resposta->setTransformer(function ($value) {
+            $value = trim($value);
+            return match ($value) {
+                'NC' => '<span style="color:red;font-weight:bold">NC - Não Conforme</span>',
+                'P'  => '<span style="color:orange;font-weight:bold">P - Parcial</span>',
+                'OP' => '<span style="color:blue;font-weight:bold">OP - Oportunidade de Melhoria</span>',
+                default => '<span style="color:gray">Conforme/Não visto</span>'
+            };
+        });
 
-        $col_score->setTransformer(function($value) {
+        $col_score->setTransformer(function ($value) {
             return number_format($value, 1, ',', '.');
         });
 
@@ -93,7 +93,7 @@ class AuditoriaView extends TPage
         $container->style = 'width: 100%; max-width: 1200px; margin: 0 auto;';
         $container->add($this->form);
         $container->add($panel);
-        
+
         parent::add($container);
     }
 
@@ -109,8 +109,7 @@ class AuditoriaView extends TPage
             $conn = TTransaction::get();
 
             $sql_cab = "
-                SELECT
-                    ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
+                SELECT ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
                 FROM ZCM010
                 WHERE ZCM_DOC = :doc AND D_E_L_E_T_ <> '*'
             ";
@@ -124,14 +123,13 @@ class AuditoriaView extends TPage
 
             $datahora = $this->formatarData($row_cab['ZCM_DATA']) . ' ' . $this->formatarHora($row_cab['ZCM_HORA']);
 
-            $this->form->setData((object)[
-                'zcm_doc' => trim($row_cab['ZCM_DOC']),
-                'zcm_filial' => trim($row_cab['ZCM_FILIAL']),
-                'zcm_tipo' => trim($row_cab['ZCM_TIPO']),
-                'zcm_datahora' => $datahora,
-                'zcm_usuario' => trim($row_cab['ZCM_USUGIR']),
-                'zcm_obs' => trim($row_cab['ZCM_OBS'] ?? ''),
-            ]);
+            $form_data = new stdClass;
+            $form_data->zcm_doc = trim($row_cab['ZCM_DOC']);
+            $form_data->zcm_filial = trim($row_cab['ZCM_FILIAL']);
+            $form_data->zcm_tipo = trim($row_cab['ZCM_TIPO']);
+            $form_data->zcm_datahora = $datahora;
+            $form_data->zcm_usuario = trim($row_cab['ZCM_USUGIR']);
+            $form_data->zcm_obs = trim($row_cab['ZCM_OBS'] ?? '');
 
             $this->datagrid->clear();
 
@@ -144,9 +142,12 @@ class AuditoriaView extends TPage
                 WHERE cn.ZCN_DOC = :doc AND cn.D_E_L_E_T_ <> '*'
                 ORDER BY cn.ZCN_ETAPA
             ";
+
             $stmt_check = $conn->prepare($sql_check);
             $stmt_check->execute([':doc' => $doc, ':tipo' => trim($row_cab['ZCM_TIPO'])]);
             $results = $stmt_check->fetchAll();
+
+            $soma = 0;
 
             foreach ($results as $row) {
                 $item = (object)[
@@ -157,27 +158,26 @@ class AuditoriaView extends TPage
                     'zcn_obs' => trim($row['ZCN_OBS'] ?? '')
                 ];
                 $this->datagrid->addItem($item);
+                
+                //que coisa linda
+                //que coisa maravilhosa
+                
+                $naoco = trim($row['ZCN_NAOCO']);
+
+                if (in_array($naoco, ['NC', 'P', 'OP'])) {
+                    $soma += (int)$row['ZCL_SCORE'];
+                }
             }
+
+            $form_data->score = 120 - $soma;
+
+            $this->form->setData($form_data);
 
             TTransaction::close();
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao carregar auditoria: ' . $e->getMessage());
             if (TTransaction::get()) TTransaction::rollback();
         }
-    }
-
-    private function calcularScore($conn, $doc, $tipo)
-    {
-        $sql_score = "
-            SELECT COALESCE(SUM(cl.ZCL_SCORE), 0) as total_score
-            FROM ZCN010 cn
-            INNER JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.ZCL_TIPO = :tipo AND cl.D_E_L_E_T_ <> '*'
-            WHERE cn.ZCN_DOC = :doc AND (cn.ZCN_NAOCO = ' ' OR cn.ZCN_NAOCO IS NULL) AND cn.D_E_L_E_T_ <> '*'
-        ";
-        $stmt = $conn->prepare($sql_score);
-        $stmt->execute([':doc' => $doc, ':tipo' => $tipo]);
-        $score_row = $stmt->fetch();
-        return (int)($score_row['total_score'] ?? 0);
     }
 
     private function formatarData($data)
