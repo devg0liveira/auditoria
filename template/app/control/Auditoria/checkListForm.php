@@ -196,7 +196,7 @@ class checkListForm extends TPage
             [$combo, $score_label]
         );
         $this->form->addFields(
-            [new TLabel('Problemas Encontrados')],
+            [new TLabel('Problemas Encontrados <span style="color:red;">*</span>')],
             [$obs]
         );
     }
@@ -294,7 +294,7 @@ class checkListForm extends TPage
         $zcm->ZCM_TIPO    = $tipo;
         $zcm->ZCM_DATA    = date('Ymd');
         $zcm->ZCM_HORA    = date('Hi');
-        $zcm->ZCM_USUARIO = TSession::getValue('userid') ?? 'Gabriel';
+        $zcm->ZCM_USUARIO = TSession::getValue('username');
         $zcm->ZCM_OBS     = trim($param['observacoes_gerais'] ?? '') ?: null;
         $zcm->store();
     }
@@ -321,7 +321,7 @@ class checkListForm extends TPage
 
         $data = date('Ymd');
         $hora = date('Hi');
-        $usuario = TSession::getValue('userid') ?? 'Gabriel';
+        $usuario = TSession::getValue('userid');
         $salvo = false;
 
         foreach ($perguntas as $p) {

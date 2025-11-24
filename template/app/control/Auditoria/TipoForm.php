@@ -6,9 +6,8 @@ use Adianti\Widget\Form\TLabel;
 use Adianti\Widget\Form\TButton;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
+use Adianti\Registry\TSession;
 use Adianti\Widget\Dialog\TMessage;
-use Adianti\Database\TRepository;
-
 class TipoForm extends TPage
 {
     private $form;
@@ -61,8 +60,7 @@ class TipoForm extends TPage
 
             $obj->ZCK_DATA   = date('Ymd');
             $obj->ZCK_HORA   = date('Hi');
-            $obj->ZCK_USUGIR = 'Gabriel';
-
+            $obj->ZCK_USUARIO = TSession::getValue('username');
             $obj->store();
 
             TTransaction::close();

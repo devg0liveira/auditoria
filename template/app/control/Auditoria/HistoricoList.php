@@ -39,7 +39,7 @@ class HistoricoList extends TStandardList
         $this->setLimit(10);
 
         $this->form = new BootstrapFormBuilder('form_filtro_historico');
-        $this->form->setFormTitle('Filtro');
+        $this->form->setFormTitle('Auditoria');
 
         $data_de  = new TDate('data_de');
         $data_ate = new TDate('data_ate');
@@ -101,7 +101,12 @@ class HistoricoList extends TStandardList
         $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
         $panel->add($this->form);
         $panel->add($this->datagrid);
+        $panel->getBody()->style = 'overflow-x: auto';
         $panel->addFooter($this->pageNavigation);
+
+        /*
+       
+        */
 
         $panel->addHeaderActionLink(
             'Nova Auditoria',

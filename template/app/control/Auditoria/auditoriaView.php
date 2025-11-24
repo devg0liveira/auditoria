@@ -159,9 +159,6 @@ class AuditoriaView extends TPage
                 ];
                 $this->datagrid->addItem($item);
                 
-                //que coisa linda
-                //que coisa maravilhosa
-                
                 $naoco = trim($row['ZCN_NAOCO']);
 
                 if (in_array($naoco, ['NC', 'P', 'OP'])) {
@@ -186,7 +183,7 @@ class AuditoriaView extends TPage
     }
 
     private function formatarHora($hora)
-    {
-        return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
-    }
+{
+    return strlen($hora) == 6 ? substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2) : $hora;
+}
 }

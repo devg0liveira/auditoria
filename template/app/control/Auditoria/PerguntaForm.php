@@ -5,6 +5,7 @@ use Adianti\Widget\Form\TLabel;
 use Adianti\Widget\Form\TButton;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
+use Adianti\Registry\TSession;
 use Adianti\Validator\TRequiredValidator;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Form\TCombo;
@@ -83,7 +84,7 @@ class PerguntaForm extends TPage
             $obj->ZCJ_FILIAL = '01'; 
             $obj->ZCJ_DATA = date('Ymd');
             $obj->ZCJ_HORA = date('Hi');
-            $obj->ZCJ_USUGIR = 'Gabriel';
+             $obj->ZCJ_USUARIO = TSession::getValue('username');
             $obj->D_E_L_E_T_ = ' '; 
             $obj->R_E_C_D_E_L_ = 0;
             $obj->store();
@@ -107,7 +108,7 @@ class PerguntaForm extends TPage
             
             $zcl->ZCL_DATA = date('Ymd');
             $zcl->ZCL_HORA = date('Hi');
-            $zcl->ZCL_USUGIR = 'SYSTEM';
+            $zcl->ZCL_USUGIR = TSession::getvalue ('username');
             $zcl->D_E_L_E_T_ = ' ';
             $zcl->store();
 
