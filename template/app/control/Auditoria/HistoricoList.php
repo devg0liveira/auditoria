@@ -137,13 +137,14 @@ class HistoricoList extends TStandardList
         $this->form->setData($data);
 
         TScript::create("
-            var form = $('#form_filtro_historico');
-            if (form.is(':visible')) {
-                form.slideUp(300);
-            } else {
-                form.slideDown(300);
-            }
-        ");
+    var form = $('#form_filtro_historico');
+
+    if (form.is(':visible')) {
+        form.slideUp(300);
+    } else {
+        form.slideDown(300);
+    }
+");
     }
 
     public function onSearch($param = null)

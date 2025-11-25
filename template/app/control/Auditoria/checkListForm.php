@@ -196,7 +196,7 @@ class checkListForm extends TPage
             [$combo, $score_label]
         );
         $this->form->addFields(
-            [new TLabel('Problemas Encontrados <span style="color:red;">*</span>')],
+            [new TLabel('Problemas Encontrados: <span style="color:red;">*</span>')],
             [$obs]
         );
     }
@@ -209,7 +209,7 @@ class checkListForm extends TPage
         if ($dados_salvos['readonly']) $obs_gerais->setEditable(false);
 
         $this->form->addFields(
-            [new TLabel('Observações Gerais:')],
+            [new TLabel('Observações Gerais: <span style="color:red;">*</span>')],
             [$obs_gerais]
         );
     }
