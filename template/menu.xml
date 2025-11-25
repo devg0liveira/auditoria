@@ -110,6 +110,7 @@
     </menuitem>
         
     <menuitem label='Auditoria'>
+        <icon>fa-check-double fa-fw</icon>
         <menu>
             <menuitem label='Insperções'>
                 <icon>fas:file-alt fa-fw</icon>

@@ -321,7 +321,7 @@ class checkListForm extends TPage
 
         $data = date('Ymd');
         $hora = date('Hi');
-        $usuario = TSession::getValue('userid');
+        $usuario = TSession::getValue('username');
         $salvo = false;
 
         foreach ($perguntas as $p) {
