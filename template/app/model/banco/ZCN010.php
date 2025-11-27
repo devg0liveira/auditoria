@@ -20,12 +20,13 @@ class ZCN010 extends TRecord
         parent::addAttribute('ZCN_FOTO');
         parent::addAttribute('ZCN_OBS');
         parent::addAttribute('D_E_L_E_T_');
-        PARENT::addAttribute('R_E_C_N_O_');
+        parent::addAttribute('R_E_C_N_O_');
         parent::addAttribute('R_E_C_D_E_L_');
         parent::addAttribute('ZCN_ACAO');
         parent::addAttribute('ZCN_RESP');
         parent::addAttribute('ZCN_PRAZO');
         parent::addAttribute('ZCN_STATUS');
         parent::addAttribute('ZCN_DATA_EXEC');
+        parent::addAttribute('ZCN_TIPO_AUD');
     }
 }

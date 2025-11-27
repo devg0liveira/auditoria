@@ -22,22 +22,12 @@ class IniciativaForm extends TPage
     public function __construct()
     {
         parent::__construct();
-
         $this->form = new BootstrapFormBuilder('form_iniciativa');
         $this->form->setFormTitle('Plano de Ação - Iniciativas de Melhoria');
-
-        $this->form->style = "
-            padding: 20px;
-            max-width: 100%;
-            width: 100%;
-            margin: 0 auto;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        ";
-
+        $this->form->style = 'padding:20px; max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1)';
+        
         $this->form->addAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left');
-
+        
         $action_save = new TAction([$this, 'onSave']);
         $this->form->addAction('Salvar', $action_save, 'fa:save green');
     }
@@ -46,7 +36,6 @@ class IniciativaForm extends TPage
     {
         try {
             $doc = $param['doc'] ?? null;
-
             if (!$doc || trim($doc) === '') {
                 throw new Exception('Documento da auditoria não informado.');
             }
@@ -86,126 +75,193 @@ class IniciativaForm extends TPage
             }
 
             $this->form->clear();
-
-            $this->form->addContent([
-                "<h3 style='color:#0066cc; text-align:center; margin-bottom:10px'>
-                    Auditoria: <b>{$doc}</b>
-                </h3>"
-            ]);
+            $this->form->addFields([new TLabel("<h3 style='color:#0066cc; text-align:center'>Auditoria: <b>{$doc}</b></h3>")]);
 
             $hiddenDoc = new THidden('doc');
             $hiddenDoc->setValue($doc);
             $this->form->addFields([$hiddenDoc]);
 
             foreach ($ncs as $nc) {
-
                 $etapa = trim($nc['ZCN_ETAPA']);
                 $seq   = trim($nc['ZCN_SEQ']);
                 $key   = "{$etapa}_{$seq}";
 
-                $this->form->addContent(["<hr style='border:0; border-top:1px dashed #ccc; margin:20px 0'>"]);
-
-                $this->form->addContent([
-                    "<div style='font-size:15px; font-weight:bold; color:#003366; margin-bottom:5px'>
-                        Etapa {$etapa}: <span style='font-weight:normal'>{$nc['ZCJ_DESCRI']}</span>
-                    </div>"
+                $this->form->addFields([new TLabel('<hr style="border:1px dashed #ccc; margin:20px 0">')]);
+                $this->form->addFields([
+                    new TLabel("<b style='font-size:15px'>Etapa {$etapa}</b>: " . htmlspecialchars($nc['ZCJ_DESCRI']), '#003366')
+                ]);
+                $this->form->addFields([
+                    new TLabel("Tipo: <span style='color:red; font-weight:bold'>{$nc['ZCN_NAOCO']}</span>")
                 ]);
 
-                $this->form->addContent([
-                    "<div style='margin-bottom:10px'>
-                        Tipo: <span style='color:red; font-weight:bold'>{$nc['ZCN_NAOCO']}</span>
-                    </div>"
-                ]);
-
-
+                
                 $acao = new TText("acao_{$key}");
                 $acao->setSize('100%', 90);
                 $acao->addValidation('Ação corretiva', new TRequiredValidator);
-                $acao->addValidation('Ação corretiva', new TMinLengthValidator, [5]);
-                $acao->setValue($nc['ZCN_ACAO']);
-
-                $this->form->addFields(
-                    [new TLabel('Ação corretiva <span style="color:red">*</span>')],
-                    [$acao]
-                );
+                $acao->addValidation('Ação corretiva', new TMinLengthValidator, array(1));
 
                 $resp = new TEntry("resp_{$key}");
                 $resp->setSize('100%');
                 $resp->addValidation('Responsável', new TRequiredValidator);
-                $resp->addValidation('Responsável', new TMinLengthValidator, [3]);
-                $resp->setValue($nc['ZCN_RESP']);
-
+                $resp->addValidation('Responsável', new TMinLengthValidator, array(1));
+                
                 $prazo = new TDate("prazo_{$key}");
                 $prazo->setMask('dd/mm/yyyy');
                 $prazo->addValidation('Prazo', new TRequiredValidator);
-                $prazo->setValue($this->formatDate($nc['ZCN_PRAZO']));
-
-                $this->form->addFields(
-                    [new TLabel('Responsável <span style="color:red">*</span>')],
-                    [$resp],
-                    [new TLabel('Prazo <span style="color:red">*</span>')],
-                    [$prazo]
-                );
 
                 $exec = new TDate("exec_{$key}");
                 $exec->setMask('dd/mm/yyyy');
-                $exec->setValue($this->formatDate($nc['ZCN_DATA_EXEC']));
 
                 $status = new TCombo("status_{$key}");
                 $status->addItems(['A' => 'Em Andamento', 'C' => 'Concluído']);
                 $status->setSize('100%');
-                $status->setValue($nc['ZCN_STATUS']);
-
-                $this->form->addFields(
-                    [new TLabel('Data Execução')],
-                    [$exec],
-                    [new TLabel('Status')],
-                    [$status]
-                );
 
                 $obs = new TText("obs_{$key}");
                 $obs->setSize('100%', 70);
+
+                $acao->setValue($nc['ZCN_ACAO']);
+                $resp->setValue($nc['ZCN_RESP']);
+                $prazo->setValue($this->formatDate($nc['ZCN_PRAZO']));
+                $exec->setValue($this->formatDate($nc['ZCN_DATA_EXEC']));
+                $status->setValue($nc['ZCN_STATUS']);
                 $obs->setValue($nc['ZCN_OBS']);
                 $obs->setEditable(false);
 
+                $this->form->addFields([new TLabel('Ação corretiva <span style="color:red">*</span>')], [$acao]);
+                $this->form->addFields([new TLabel('Responsável <span style="color:red">*</span>'), new TLabel('Prazo <span style="color:red">*</span>')], [$resp, $prazo]);
+                $this->form->addFields([new TLabel('Data Execução'), new TLabel('Status')], [$exec, $status]);
                 $this->form->addFields([new TLabel('Observações')], [$obs]);
             }
 
             TTransaction::close();
             parent::add($this->form);
-
         } catch (Exception $e) {
             new TMessage('error', 'Erro ao carregar: ' . $e->getMessage());
             TTransaction::rollbackAll();
         }
     }
 
-    
     public function onSave($param)
     {
-       
+        try {
+            $this->form->validate();
+
+            TTransaction::open('auditoria');
+            $conn = TTransaction::get();
+
+            $doc = $param['doc'] ?? null;
+
+            if (!$doc) {
+                throw new Exception('Documento não informado.');
+            }
+
+            $stmt = $conn->prepare("SELECT ZCN_STATUS FROM ZCN010 WHERE ZCN_DOC = ? AND D_E_L_E_T_ <> '*'");
+            $stmt->execute([$doc]);
+            $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($ncs as $nc) {
+                if ($nc['ZCN_STATUS'] == 'C') {
+                    new TMessage('warning', 'O plano de ação já está concluído e não pode mais ser alterado.');
+                    TTransaction::close();
+                    AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+                    return;
+                }
+            }
+
+            if (empty($param)) {
+                throw new Exception('Nenhum dado recebido para salvar.');
+            }
+
+            $erros = [];
+
+            foreach ($param as $key => $value) {
+                if (strpos($key, 'acao_') === 0) {
+                    $parts = explode('_', $key);
+                    $etapa = $parts[1] ?? null;
+                    $seq   = $parts[2] ?? '001';
+
+                    if (!$etapa) continue;
+
+                    $acao = trim($param["acao_{$etapa}_{$seq}"] ?? '');
+                    $resp = trim($param["resp_{$etapa}_{$seq}"] ?? '');
+                    $prazo = trim($param["prazo_{$etapa}_{$seq}"] ?? '');
+
+                    if (empty($acao)) {
+                        $erros[] = "Etapa {$etapa}: Ação corretiva é obrigatória.";
+                    } elseif (strlen($acao) < 1) {
+                        $erros[] = "Etapa {$etapa}: Ação corretiva deve ter no mínimo 1 caracteres.";
+                    }
+
+                    if (empty($resp)) {
+                        $erros[] = "Etapa {$etapa}: Responsável é obrigatório.";
+                    } elseif (strlen($resp) < 1) {
+                        $erros[] = "Etapa {$etapa}: Responsável deve ter no mínimo 1 caracteres.";
+                    }
+
+                    if (empty($prazo)) {
+                        $erros[] = "Etapa {$etapa}: Prazo é obrigatório.";
+                    }
+
+                    if (!empty($erros)) {
+                        continue;
+                    }
+
+                    $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
+                        ->where('ZCN_ETAPA', '=', $etapa)
+                        ->where('ZCN_SEQ', '=', $seq)
+                        ->first();
+
+                    if ($zcn) {
+                        $zcn->ZCN_ACAO      = $acao;
+                        $zcn->ZCN_RESP      = $resp;
+                        $zcn->ZCN_PRAZO     = self::toDbDate($prazo);
+                        $zcn->ZCN_DATA_EXEC = self::toDbDate(trim($param["exec_{$etapa}_{$seq}"] ?? ''));
+                        $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
+                        $zcn->ZCN_OBS       = trim($param["obs_{$etapa}_{$seq}"] ?? '');
+                        $zcn->store();
+                    }
+                }
+            }
+
+            if (!empty($erros)) {
+                TTransaction::rollback();
+                throw new Exception("Erros de validação:\n" . implode("\n", $erros));
+            }
+
+            TTransaction::close();
+
+            new TMessage('info', 'Plano de ação salvo com sucesso!');
+            AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+        } 
+        catch (Exception $e) {
+            new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
+            TTransaction::rollbackAll();
+        }
     }
 
     private static function toDbDate($date)
     {
         $date = trim($date ?? '');
-        if ($date === '' || $date === null) return null;
+        if ($date === '' || $date === null) {
+            return null;
+        }
 
         $parts = explode('/', $date);
         if (count($parts) === 3) {
-            [$d,$m,$y] = $parts;
-            if (checkdate($m,$d,$y)) {
-                return sprintf('%04d%02d%02d',$y,$m,$d);
+            [$day, $month, $year] = $parts;
+            if (checkdate((int)$month, (int)$day, (int)$year)) {
+                return sprintf('%04d%02d%02d', $year, $month, $day);
             }
         }
+
         return null;
     }
 
     private function formatDate($date)
     {
         $date = trim($date ?? '');
-        if (strlen($date)==8 && ctype_digit($date)) {
-            return substr($date,6,2).'/'.substr($date,4,2).'/'.substr($date,0,4);
+        if (strlen($date) === 8 && ctype_digit($date)) {
+            return substr($date, 6, 2) . '/' . substr($date, 4, 2) . '/' . substr($date, 0, 4);
         }
         return '';
     }

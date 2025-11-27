@@ -4,9 +4,6 @@ use Adianti\Control\TAction;
 use Adianti\Control\TPage;
 use Adianti\Control\TWindow;
 use Adianti\Core\AdiantiCoreApplication;
-use Adianti\Database\TCriteria;
-use Adianti\Database\TFilter;
-use Adianti\Database\TRepository;
 use Adianti\Database\TTransaction;
 use Adianti\Registry\TSession;
 use Adianti\Validator\TRequiredValidator;
@@ -22,6 +19,7 @@ use Adianti\Widget\Form\TText;
 class checkListForm extends TPage
 {
     protected $form;
+
     private $opcoes_resposta = [
         'C'  => 'Conforme',
         'NC' => 'Não Conforme',
@@ -40,73 +38,112 @@ class checkListForm extends TPage
     public function onStart($param)
     {
         try {
-            $tipo = $param['tipo'] ?? TSession::getValue('auditoria_tipo');
-            if (!$tipo) {
-                throw new Exception('Tipo de auditoria não informado.');
+            $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
+            if (!$filial) {
+                throw new Exception('Filial não informada.');
             }
 
             TTransaction::open('auditoria');
 
-            $tipoObj = ZCK010::where('ZCK_TIPO', '=', $tipo)
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->first();
+            $tipos = ZCK010::where('D_E_L_E_T_', '<>', '*')
+                ->orderBy('ZCK_TIPO')
+                ->load();
 
-            if (!$tipoObj) {
-                throw new Exception('Tipo não encontrado.');
+            if (empty($tipos)) {
+                throw new Exception('Nenhum tipo de auditoria cadastrado.');
             }
 
-            $perguntas = $this->buscarPerguntasComScore($tipo);
+            $perguntas_com_score = $this->buscarTodasPerguntasComScore();
 
-            if (empty($perguntas)) {
-                throw new Exception("Nenhuma pergunta encontrada para o tipo {$tipo}.");
+            if (empty($perguntas_com_score)) {
+                throw new Exception("Nenhuma pergunta encontrada.");
             }
 
             $dados_salvos = $this->buscarDadosSalvos();
 
             TTransaction::close();
 
-            $this->montarFormulario($tipoObj, $tipo, $perguntas, $dados_salvos);
+            $this->montarFormularioCompleto($filial, $tipos, $perguntas_com_score, $dados_salvos);
         } catch (Exception $e) {
             if (TTransaction::get()) TTransaction::rollback();
             new TMessage('error', $e->getMessage());
         }
     }
 
-    private function buscarPerguntasComScore($tipo)
+    private function buscarTodasPerguntasComScore()
     {
-        $criteria = new TCriteria;
-        $criteria->add(new TFilter('ZCJ010.D_E_L_E_T_', '<>', '*'));
-        $criteria->add(new TFilter('ZCL010.D_E_L_E_T_', '<>', '*'));
-        $criteria->add(new TFilter('ZCL010.ZCL_TIPO', '=', $tipo));
-        $criteria->setProperty('order', 'ZCJ010.ZCJ_ETAPA');
+        $perguntas = [];
 
-        $repo = new TRepository('ZCJ010');
+        $etapas = ZCL010::where('D_E_L_E_T_', '<>', '*')->load();
+        if (empty($etapas)) {
+            return $perguntas;
+        }
 
-        $etapas_tipo = ZCL010::where('ZCL_TIPO', '=', $tipo)
+        $scores = [];
+        $etapas_ids = [];
+        foreach ($etapas as $e) {
+            $etapas_ids[] = $e->ZCL_ETAPA;
+            $scores[$e->ZCL_ETAPA] = (float)($e->ZCL_SCORE ?? 0);
+        }
+
+        
+        $pergs = ZCJ010::where('ZCJ_ETAPA', 'IN', $etapas_ids)
             ->where('D_E_L_E_T_', '<>', '*')
+            ->orderBy('ZCJ_ETAPA')
             ->load();
 
-        if (empty($etapas_tipo)) {
-            throw new Exception("Nenhuma etapa vinculada ao tipo {$tipo}.");
+        if (empty($pergs)) {
+            return $perguntas;
         }
 
-        $scores_por_etapa = [];
-        foreach ($etapas_tipo as $rel) {
-            $scores_por_etapa[$rel->ZCL_ETAPA] = $rel->ZCL_SCORE ?? 0;
+        $mapa_etapa_para_tipo = [];
+        foreach ($etapas as $e) {
+            $mapa_etapa_para_tipo[$e->ZCL_ETAPA] = $e->ZCL_TIPO ?? null;
         }
 
-        $criteria_perguntas = new TCriteria;
-        $criteria_perguntas->add(new TFilter('D_E_L_E_T_', '<>', '*'));
-        $criteria_perguntas->add(new TFilter('ZCJ_ETAPA', 'IN', array_keys($scores_por_etapa)));
-        $criteria_perguntas->setProperty('order', 'ZCJ_ETAPA');
+        $tipos = ZCK010::where('D_E_L_E_T_', '<>', '*')->load();
+        $mapa_tipo_descricao = [];
+        foreach ($tipos as $t) {
+            $mapa_tipo_descricao[$t->ZCK_TIPO] = $t->ZCK_DESCRI ?? "Tipo {$t->ZCK_TIPO}";
+        }
 
-        $perguntas = $repo->load($criteria_perguntas);
-
-        foreach ($perguntas as $p) {
-            $p->score = $scores_por_etapa[$p->ZCJ_ETAPA] ?? 0;
+        foreach ($pergs as $p) {
+            $p->score = $scores[$p->ZCJ_ETAPA] ?? 0;
+            $tipo_codigo = $mapa_etapa_para_tipo[$p->ZCJ_ETAPA] ?? null;
+            $p->tipo_descricao = $mapa_tipo_descricao[$tipo_codigo] ?? ($tipo_codigo ? "Tipo {$tipo_codigo}" : 'Sem tipo');
+            $perguntas[] = $p;
         }
 
         return $perguntas;
+    }
+
+    private function montarFormularioCompleto($filial, $tipos, $perguntas, $dados_salvos)
+    {
+        $this->form = new BootstrapFormBuilder('form_checklist');
+        $this->form->setColumnClasses(2, ['col-sm-8', 'col-sm-4']);
+        $this->form->setFormTitle('CheckList Completo - Filial: ' . $filial);
+
+        $this->form->addFields([new THidden('filial')]);
+        $this->form->setData((object)['filial' => $filial]);
+
+        $tipo_atual = null;
+
+        foreach ($perguntas as $p) {
+            if ($p->tipo_descricao !== $tipo_atual) {
+                $tipo_atual = $p->tipo_descricao;
+                $this->form->appendPage($tipo_atual);
+            }
+
+            $this->renderizarPergunta($p, $dados_salvos);
+        }
+
+        $this->adicionarObservacoesGerais($dados_salvos);
+
+        if (!($dados_salvos['readonly'] ?? false)) {
+            $this->adicionarBotoes();
+        }
+
+        parent::add($this->form);
     }
 
     private function buscarDadosSalvos()
@@ -127,6 +164,7 @@ class checkListForm extends TPage
                 ->load();
 
             foreach ($respostas as $r) {
+                // Armazenar respostas por etapa
                 $dados['respostas'][$r->ZCN_ETAPA] = $r->ZCN_TIPO ?? '';
                 $dados['observacoes'][$r->ZCN_ETAPA] = $r->ZCN_OBS ?? '';
             }
@@ -143,32 +181,6 @@ class checkListForm extends TPage
         return $dados;
     }
 
-    private function montarFormulario($tipoObj, $tipo, $perguntas, $dados_salvos)
-    {
-        $this->form = new BootstrapFormBuilder('form_checklist');
-        $this->form->setColumnClasses(2, ['col-sm-8', 'col-sm-4']);
-
-        $titulo = $dados_salvos['readonly']
-            ? "Visualização: {$tipoObj->ZCK_DESCRI}"
-            : "CheckList: {$tipoObj->ZCK_DESCRI}";
-        $this->form->setFormTitle($titulo);
-
-        $this->form->addFields([new THidden('tipo')]);
-        $this->form->setData((object)['tipo' => $tipo]);
-
-        foreach ($perguntas as $p) {
-            $this->renderizarPergunta($p, $dados_salvos);
-        }
-
-        $this->adicionarObservacoesGerais($dados_salvos);
-
-        if (!$dados_salvos['readonly']) {
-            $this->adicionarBotoes();
-        }
-
-        parent::add($this->form);
-    }
-
     private function renderizarPergunta($pergunta, $dados_salvos)
     {
         $etapa = $pergunta->ZCJ_ETAPA;
@@ -180,7 +192,7 @@ class checkListForm extends TPage
         $combo->setSize('100%');
         $combo->setValue($dados_salvos['respostas'][$etapa] ?? '');
         $combo->addValidation("Etapa {$etapa} - Conformidade", new TRequiredValidator);
-        if ($dados_salvos['readonly']) $combo->setEditable(false);
+        if (!empty($dados_salvos['readonly'])) $combo->setEditable(false);
 
         $score_label = new TLabel("<b>Score:</b> {$score}");
         $score_label->setFontColor('#666');
@@ -189,7 +201,7 @@ class checkListForm extends TPage
         $obs->setSize('100%', 80);
         $obs->setValue($dados_salvos['observacoes'][$etapa] ?? '');
         $obs->addValidation("Etapa {$etapa} - Observações", new TRequiredValidator);
-        if ($dados_salvos['readonly']) $obs->setEditable(false);
+        if (!empty($dados_salvos['readonly'])) $obs->setEditable(false);
 
         $this->form->addFields(
             [new TLabel("<b>Etapa {$etapa}:</b> {$desc}")],
@@ -206,17 +218,17 @@ class checkListForm extends TPage
         $obs_gerais = new TText('observacoes_gerais');
         $obs_gerais->setSize('100%', 120);
         $obs_gerais->setValue($dados_salvos['obs_gerais']);
-        if ($dados_salvos['readonly']) $obs_gerais->setEditable(false);
+        if (!empty($dados_salvos['readonly'])) $obs_gerais->setEditable(false);
 
         $this->form->addFields(
-            [new TLabel('Observações Gerais: <span style="color:red;">*</span>')],
+            [new TLabel('Observações Gerais: <span style="color:red">*</span>')],
             [$obs_gerais]
         );
     }
 
     private function adicionarBotoes()
     {
-        $this->form->addAction('Voltar', new TAction(['inicioAuditoriaModal', 'onReload']), 'fa:arrow-left');
+        $this->form->addAction('Voltar', new TAction(['inicioAuditoriaModal', 'onOpenCurtain']), 'fa:arrow-left');
 
         $btn = new TButton('salvar');
         $btn->setLabel('Salvar');
@@ -229,7 +241,7 @@ class checkListForm extends TPage
         TScript::create("
             function validarChecklist() {
                 let ok = true;
-                
+
                 document.querySelectorAll('select[name^=resposta_]').forEach(c => {
                     if (c.value == '') ok = false;
                 });
@@ -255,18 +267,15 @@ class checkListForm extends TPage
     public function onSave($param)
     {
         try {
-            $tipo = $param['tipo'] ?? null;
-            if (!$tipo) throw new Exception('Tipo não informado.');
-
             TTransaction::open('auditoria');
 
             $novoDoc = self::gerarNovoDocumento();
 
-            self::salvarCabecalho($novoDoc, $tipo, $param);
+            self::salvarCabecalho($novoDoc, $param);
 
-            $scores_por_etapa = self::buscarScoresPorEtapa($tipo);
+            $scores_por_etapa = self::buscarScoresPorEtapa();
 
-            $salvo = self::salvarRespostas($novoDoc, $tipo, $param, $scores_por_etapa);
+            $salvo = self::salvarRespostas($novoDoc, $param, $scores_por_etapa);
 
             if (!$salvo) throw new Exception('Nenhuma resposta registrada.');
 
@@ -280,18 +289,17 @@ class checkListForm extends TPage
         }
     }
 
-    private  function gerarNovoDocumento()
+    private function gerarNovoDocumento()
     {
         $ultimo = ZCM010::orderBy('ZCM_DOC', 'desc')->first();
         return $ultimo ? str_pad(((int) $ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
     }
 
-    private  function salvarCabecalho($doc, $tipo, $param)
+    private function salvarCabecalho($doc, $param)
     {
         $zcm = new ZCM010;
         $zcm->ZCM_DOC     = $doc;
         $zcm->ZCM_FILIAL  = $param['filial'] ?? '1';
-        $zcm->ZCM_TIPO    = $tipo;
         $zcm->ZCM_DATA    = date('Ymd');
         $zcm->ZCM_HORA    = date('Hi');
         $zcm->ZCM_USUARIO = TSession::getValue('username');
@@ -299,10 +307,9 @@ class checkListForm extends TPage
         $zcm->store();
     }
 
-    private  function buscarScoresPorEtapa($tipo)
+    private function buscarScoresPorEtapa()
     {
-        $etapas = ZCL010::where('ZCL_TIPO', '=', $tipo)
-            ->where('D_E_L_E_T_', '<>', '*')
+        $etapas = ZCL010::where('D_E_L_E_T_', '<>', '*')
             ->load();
 
         $scores = [];
@@ -312,7 +319,7 @@ class checkListForm extends TPage
         return $scores;
     }
 
-    private  function salvarRespostas($doc, $tipo, $param, $scores_por_etapa)
+    private function salvarRespostas($doc, $param, $scores_por_etapa)
     {
         $perguntas = ZCJ010::where('ZCJ_ETAPA', 'IN', array_keys($scores_por_etapa))
             ->where('D_E_L_E_T_', '<>', '*')
@@ -340,9 +347,6 @@ class checkListForm extends TPage
             $zcn->ZCN_USUARIO = $usuario;
             $zcn->ZCN_OBS     = trim($param["obs_{$etapa}"] ?? '') ?: null;
 
-
-
-            //ACHO QUE RESOLVI AAAAAAAAAAAAAAAAAAAAAAAA
             if (in_array($resposta, ['NC', 'P', 'OP'])) {
                 $zcn->ZCN_NAOCO = $resposta;
                 $zcn->ZCN_SCORE = ($scores_por_etapa[$etapa] ?? 0);
