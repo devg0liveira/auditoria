@@ -226,9 +226,9 @@ class checkListForm extends TPage
         );
     }
 
-    private function adicionarBotoes()
+     private function adicionarBotoes()
     {
-        $this->form->addAction('Voltar', new TAction(['inicioAuditoriaModal', 'onOpenCurtain']), 'fa:arrow-left');
+        $this->form->addAction('Voltar', new TAction(['inicioAuditoriaModal', 'onReload']), 'fa:arrow-left');
 
         $btn = new TButton('salvar');
         $btn->setLabel('Salvar');

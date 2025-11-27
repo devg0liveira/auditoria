@@ -8,6 +8,7 @@ use Adianti\Wrapper\BootstrapFormBuilder;
 use Adianti\Database\TTransaction;
 use Adianti\Widget\Container\TVBox;
 use Adianti\Control\TAction;
+use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Base\TScript;
 use Adianti\Registry\TSession;
@@ -47,6 +48,10 @@ class inicioAuditoriaModal extends TPage
     }
 
      public function onLoad($param = null) {}
+     public static function onReload($param = null)
+{
+   AdiantiCoreApplication::loadPage('inicioAuditoriaModal');
+}
 
     private function carregarFiliais()
     {
