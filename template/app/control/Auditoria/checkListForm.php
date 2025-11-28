@@ -29,21 +29,26 @@ class checkListForm extends TPage
     public function __construct()
     {
         parent::__construct();
-        $this->form = new BootstrapFormBuilder('form_checklist');
-        $this->form->setFormTitle('CheckList de Auditoria');
     }
 
     public function onStart($param)
     {
         try {
             $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
+            $doc    = $param['doc'] ?? null;
+
             if (!$filial) throw new Exception('Filial não informada.');
 
-            // Armazena a filial na sessão
             TSession::setValue('auditoria_filial', $filial);
 
-            // Página atual (começa em 0)
-            $pagina_atual = isset($param['pagina']) ? (int)$param['pagina'] : 0;
+            if ($doc) {
+                TSession::setValue('view_auditoria', ['doc' => $doc]);
+                TSession::setValue('view_mode', false);
+                TSession::delValue('checklist_dados_temp');
+                TSession::delValue('checklist_pagina_atual');
+            }
+
+            $pagina_atual = $param['pagina'] ?? TSession::getValue('checklist_pagina_atual') ?? 0;
             TSession::setValue('checklist_pagina_atual', $pagina_atual);
 
             TTransaction::open('auditoria');
@@ -88,7 +93,6 @@ class checkListForm extends TPage
             $descricao_tipos[$t->ZCK_TIPO] = $t->ZCK_DESCRI;
         }
 
-        // Agrupa perguntas por tipo
         $agrupado = [];
         foreach ($pergs as $p) {
             $tipo_codigo = $mapa_tipo[$p->ZCJ_ETAPA] ?? null;
@@ -124,7 +128,6 @@ class checkListForm extends TPage
 
         $hidden_filial = new THidden('filial');
         $this->form->addFields([$hidden_filial]);
-        $this->form->setData((object)['filial' => $filial]);
 
         if ($pagina_atual < count($tipos)) {
             $tipo_atual = $tipos[$pagina_atual];
@@ -137,6 +140,26 @@ class checkListForm extends TPage
             $this->renderObsGerais($dados_salvos);
         }
 
+        $data = new stdClass();
+        $data->filial = $filial;
+
+        if ($dados_salvos['readonly']) {
+            foreach ($dados_salvos['respostas'] as $etapa => $valor) {
+                $data->{"resposta_{$etapa}"} = $valor;
+            }
+            foreach ($dados_salvos['observacoes'] as $etapa => $valor) {
+                $data->{"obs_{$etapa}"} = $valor;
+            }
+            $data->observacoes_gerais = $dados_salvos['obs_gerais'] ?? '';
+        } else {
+            $temp = TSession::getValue('checklist_dados_temp') ?? [];
+            foreach ($temp as $campo => $valor) {
+                $data->$campo = $valor;
+            }
+        }
+
+        $this->form->setData($data);
+
         if (!($dados_salvos['readonly'] ?? false)) {
             $this->addNumericPagination($pagina_atual, $total_paginas);
             $this->addNavigationButtons($pagina_atual, $total_paginas);
@@ -145,15 +168,14 @@ class checkListForm extends TPage
         parent::add($this->form);
     }
 
-
     private function buscarDadosSalvos()
     {
-        $view = TSession::getValue('view_mode') ?? false;
+        $view_mode = TSession::getValue('view_mode') ?? false;
         $data = TSession::getValue('view_auditoria');
 
-        $dados = ['readonly' => $view, 'respostas' => [], 'observacoes' => [], 'obs_gerais' => ''];
+        $dados = ['readonly' => $view_mode, 'respostas' => [], 'observacoes' => [], '', 'obs_gerais' => ''];
 
-        if ($view && $data) {
+        if ($data['doc'] ?? null) {
             $resp = ZCN010::where('ZCN_DOC', '=', $data['doc'])
                 ->where('D_E_L_E_T_', '<>', '*')
                 ->load();
@@ -163,11 +185,10 @@ class checkListForm extends TPage
                 $dados['observacoes'][$r->ZCN_ETAPA] = $r->ZCN_OBS;
             }
 
-            $cab = ZCM010::where('ZCM_DOC', '=', $data['doc'])
-                ->where('D_E_L_E_T_', '<>', '*')
-                ->first();
-
-            if ($cab) $dados['obs_gerais'] = $cab->ZCM_OBS;
+            $cab = ZCM010::where('ZCM_DOC', '=', $data['doc'])->first();
+            if ($cab) {
+                $dados['obs_gerais'] = $cab->ZCM_OBS;
+            }
         }
 
         return $dados;
@@ -179,12 +200,10 @@ class checkListForm extends TPage
 
         $combo = new TCombo("resposta_{$etapa}");
         $combo->addItems($this->opcoes_resposta);
-        $combo->setValue($dados['respostas'][$etapa] ?? '');
         $combo->addValidation("Etapa {$etapa}", new TRequiredValidator);
         if ($dados['readonly']) $combo->setEditable(false);
 
         $obs = new TText("obs_{$etapa}");
-        $obs->setValue($dados['observacoes'][$etapa] ?? '');
         $obs->addValidation("Observações {$etapa}", new TRequiredValidator);
         if ($dados['readonly']) $obs->setEditable(false);
 
@@ -195,7 +214,6 @@ class checkListForm extends TPage
     private function renderObsGerais($dados)
     {
         $obs = new TText('observacoes_gerais');
-        $obs->setValue($dados['obs_gerais'] ?? '');
         if ($dados['readonly']) $obs->setEditable(false);
 
         $this->form->addFields([new TLabel("<b>Observações Gerais da Auditoria:</b>")], [$obs]);
@@ -205,26 +223,28 @@ class checkListForm extends TPage
     {
         $row_buttons = [];
 
+        $btn_salvar_etapa = new TButton('btn_salvar_etapa');
+        $btn_salvar_etapa->setLabel('Salvar Progresso');
+        $btn_salvar_etapa->setImage('fa:save');
+        $btn_salvar_etapa->class = 'btn btn-success';
+        $btn_salvar_etapa->setAction(new TAction([$this, 'onSaveProgress']), 'Salvar Progresso');
+        $row_buttons[] = $btn_salvar_etapa;
+
         if ($pagina_atual == 0) {
             $btn_inicio = new TButton('btn_inicio');
             $btn_inicio->setLabel('Voltar ao Início');
             $btn_inicio->setImage('fa:arrow-left');
             $btn_inicio->class = 'btn btn-danger';
-
-            $action_inicio = new TAction(['inicioAuditoriaModal', 'onReload']);
-            $btn_inicio->setAction($action_inicio, 'Voltar');
-
+            $btn_inicio->setAction(new TAction(['inicioAuditoriaModal', 'onReload']), 'Voltar');
             $row_buttons[] = $btn_inicio;
         } else {
             $btn_voltar = new TButton('btn_voltar');
             $btn_voltar->setLabel('Voltar');
             $btn_voltar->setImage('fa:arrow-left');
             $btn_voltar->class = 'btn btn-default';
-
             $action_voltar = new TAction([$this, 'onNavigate']);
             $action_voltar->setParameter('pagina', $pagina_atual - 1);
             $btn_voltar->setAction($action_voltar, 'Voltar');
-
             $row_buttons[] = $btn_voltar;
         }
 
@@ -233,11 +253,9 @@ class checkListForm extends TPage
             $btn_proximo->setLabel('Próxima Etapa');
             $btn_proximo->setImage('fa:arrow-right');
             $btn_proximo->class = 'btn btn-primary';
-
             $action_proximo = new TAction([$this, 'onNavigate']);
             $action_proximo->setParameter('pagina', $pagina_atual + 1);
             $btn_proximo->setAction($action_proximo, 'Próxima Etapa');
-
             $row_buttons[] = $btn_proximo;
         } else {
             $btn_salvar = new TButton('btn_salvar');
@@ -245,26 +263,18 @@ class checkListForm extends TPage
             $btn_salvar->setImage('fa:check');
             $btn_salvar->class = 'btn btn-success';
             $btn_salvar->setAction(new TAction([$this, 'onSave']), 'Finalizar');
-
             $row_buttons[] = $btn_salvar;
         }
 
         $this->form->addFields($row_buttons);
     }
 
-
     public function onNavigate($param)
     {
-        try {
-            // Salva os dados do formulário atual na sessão antes de navegar
-            $this->salvarDadosTemporarios($param);
+        $this->salvarDadosTemporarios($param);
 
-            // Navega para a página solicitada
-            $param['filial'] = TSession::getValue('auditoria_filial');
-            $this->onStart($param);
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-        }
+        $param['filial'] = TSession::getValue('auditoria_filial');
+        $this->onStart($param);
     }
 
     private function addNumericPagination($pagina_atual, $total_paginas)
@@ -275,11 +285,7 @@ class checkListForm extends TPage
             $btn = new TButton("pag_$i");
             $btn->setLabel((string) ($i + 1));
 
-            if ($i == $pagina_atual) {
-                $btn->class = 'btn btn-primary';
-            } else {
-                $btn->class = 'btn btn-default';
-            }
+            $btn->class = ($i == $pagina_atual) ? 'btn btn-primary' : 'btn btn-default';
 
             $action = new TAction([$this, 'onNavigate']);
             $action->setParameter('pagina', $i);
@@ -290,15 +296,8 @@ class checkListForm extends TPage
         $this->form->addFields($buttons);
     }
 
-    public function onCloseWindow($param)
-    {
-        TWindow::closeWindow($param['__WINDOW_ID__']);
-    }
-
-
     private function salvarDadosTemporarios($param)
     {
-        // Armazena os dados do formulário na sessão para não perder ao navegar
         $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
 
         foreach ($param as $key => $value) {
@@ -310,10 +309,24 @@ class checkListForm extends TPage
         TSession::setValue('checklist_dados_temp', $dados_temp);
     }
 
+    public function onSaveProgress($param)
+    {
+        $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
+
+        foreach ($param as $key => $value) {
+            if (strpos($key, 'resposta_') === 0 || strpos($key, 'obs_') === 0 || $key === 'observacoes_gerais') {
+                $dados_temp[$key] = $value;
+            }
+        }
+
+        TSession::setValue('checklist_dados_temp', $dados_temp);
+
+        new TMessage('info', 'Progresso salvo com sucesso!');
+    }
+    
     public function onSave($param)
     {
         try {
-            // Combina dados temporários com dados atuais
             $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
             $param = array_merge($dados_temp, $param);
 
@@ -326,7 +339,6 @@ class checkListForm extends TPage
 
             TTransaction::close();
 
-            // Limpa dados temporários
             TSession::delValue('checklist_dados_temp');
             TSession::delValue('checklist_pagina_atual');
 
@@ -353,6 +365,8 @@ class checkListForm extends TPage
         $z->ZCM_HORA    = date('Hi');
         $z->ZCM_USUARIO = TSession::getValue('username');
         $z->ZCM_OBS     = $p['observacoes_gerais'] ?? null;
+        $z->ZCM_STATUS  = 'F';
+        $z->ZCM_TIPO    = TSession::getValue('tipo_auditoria') ?? '001';
         $z->store();
     }
 
