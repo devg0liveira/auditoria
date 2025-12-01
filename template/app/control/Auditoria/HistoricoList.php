@@ -61,6 +61,7 @@ class HistoricoList extends TStandardList
 
         $this->form->addAction('Limpar', new TAction([$this, 'onClear']), 'fa:eraser red');
         $this->form->addAction('Pesquisar', new TAction([$this, 'onSearch']), 'fa:search blue');
+        
 
         $this->form->style = 'display:none';
 

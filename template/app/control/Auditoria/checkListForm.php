@@ -309,46 +309,107 @@ class checkListForm extends TPage
         TSession::setValue('checklist_dados_temp', $dados_temp);
     }
 
-    public function onSaveProgress($param)
-    {
-        $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
-
-        foreach ($param as $key => $value) {
-            if (strpos($key, 'resposta_') === 0 || strpos($key, 'obs_') === 0 || $key === 'observacoes_gerais') {
-                $dados_temp[$key] = $value;
-            }
-        }
-
-        TSession::setValue('checklist_dados_temp', $dados_temp);
-
-        new TMessage('info', 'Progresso salvo com sucesso!');
-    }
-    
-    public function onSave($param)
-    {
-        try {
-            $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
-            $param = array_merge($dados_temp, $param);
-
-            TTransaction::open('auditoria');
-
+    public function onNavegate($param)
+{
+    try {
+        $this->salvarDadosTemporarios($param);
+        
+        $doc_rascunho = TSession::getValue('doc_rascunho_atual');
+        
+        if (!$doc_rascunho) {
+            
             $doc = $this->gerarNovoDoc();
-            $this->salvarCabecalho($doc, $param);
-            $scores = $this->buscarScores();
-            $this->salvarRespostas($doc, $param, $scores);
-
-            TTransaction::close();
-
-            TSession::delValue('checklist_dados_temp');
-            TSession::delValue('checklist_pagina_atual');
-
-            new TMessage('info', "Auditoria nº $doc finalizada com sucesso!");
-            AdiantiCoreApplication::loadPage('HistoricoList', 'onReload', ['doc' => $doc]);
-        } catch (Exception $e) {
-            TTransaction::rollbackAll();
-            new TMessage('error', $e->getMessage());
+            $this->salvarCabecalho($doc, $param, true);
+            TSession::setValue('doc_rascunho_atual', $doc);
+        } else {
+   
+            $this->atualizarCabecalhoRascunho($doc_rascunho, $param);
         }
+
+        $scores = $this->buscarScores();
+        $this->salvarRespostas(TSession::getValue('doc_rascunho_atual'), $param, $scores);
+
+   
+        
+    } catch (Exception $e) {
+        new TMessage('error', $e->getMessage());
     }
+}
+
+    public function onSaveProgress($param)
+{
+    try {
+        $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
+        $param = array_merge($dados_temp, $param);
+
+        TTransaction::open('auditoria');
+
+        $doc_rascunho = TSession::getValue('doc_rascunho_atual');
+        
+        if (!$doc_rascunho) {
+            $doc = $this->gerarNovoDoc();
+            $this->salvarCabecalho($doc, $param, true); 
+            TSession::setValue('doc_rascunho_atual', $doc);
+        } else {
+            $this->atualizarCabecalhoRascunho($doc_rascunho, $param);
+        }
+
+        $scores = $this->buscarScores();
+        $this->salvarRespostas(TSession::getValue('doc_rascunho_atual'), $param, $scores);
+
+        TTransaction::close();
+
+        TSession::delValue('checklist_dados_temp');
+        TSession::delValue('checklist_pagina_atual');
+
+        new TMessage('info', 'Progresso salvo temporariamente!');
+        
+        AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
+    }
+    catch (Exception $e) {
+        TTransaction::rollback();
+        new TMessage('error', $e->getMessage());
+    }
+}
+
+
+    public function onSave($param)
+{
+    try {
+        $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
+        $param = array_merge($dados_temp, $param);
+
+        TTransaction::open('auditoria');
+
+        $doc_rascunho = TSession::getValue('doc_rascunho_atual');
+        
+        if (!$doc_rascunho) {
+            $doc = $this->gerarNovoDoc();
+            $this->salvarCabecalho($doc, $param, true); 
+            TSession::setValue('doc_rascunho_atual', $doc);
+        } else {
+            $doc = $doc_rascunho;
+            $this->atualizarCabecalhoRascunho($doc, $param);
+        }
+
+        $scores = $this->buscarScores();
+        $this->salvarRespostas($doc, $param, $scores);
+
+        $this->finalizarAuditoria($doc);
+
+        TTransaction::close();
+
+        TSession::delValue('checklist_dados_temp');
+        TSession::delValue('doc_rascunho_atual');
+        TSession::delValue('checklist_pagina_atual');
+
+        new TMessage('info', "Auditoria nº $doc finalizada com sucesso!");
+        AdiantiCoreApplication::loadPage('HistoricoList', 'onReload', ['doc' => $doc]);
+    } catch (Exception $e) {
+        TTransaction::rollbackAll();
+        new TMessage('error', $e->getMessage());
+    }
+}
 
     private function gerarNovoDoc()
     {
@@ -356,7 +417,29 @@ class checkListForm extends TPage
         return $ultimo ? str_pad(((int) $ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
     }
 
-    private function salvarCabecalho($doc, $p)
+    private function atualizarCabecalhoRascunho($doc, $p)
+{
+    $z = ZCM010::where('ZCM_DOC', '=', $doc)->first();
+    if ($z) {
+        $z->ZCM_FILIAL  = $p['filial'];
+        $z->ZCM_USUARIO = TSession::getValue('username');
+        $z->ZCM_OBS     = $p['observacoes_gerais'] ?? $z->ZCM_OBS;
+        $z->ZCM_TIPO    = TSession::getValue('tipo_auditoria') ?? $z->ZCM_TIPO;
+        $z->ZCM_DATA    = date('Ymd');
+        $z->ZCM_HORA    = date('Hi');
+        $z->store();
+    }
+}
+
+private function finalizarAuditoria($doc)
+{
+    $z = ZCM010::where('ZCM_DOC', '=', $doc)->first();
+    if ($z) {
+        $z->store();
+    }
+}
+
+    private function salvarCabecalho($doc, $p, $isDraft = false)
     {
         $z = new ZCM010;
         $z->ZCM_DOC     = $doc;
@@ -365,7 +448,6 @@ class checkListForm extends TPage
         $z->ZCM_HORA    = date('Hi');
         $z->ZCM_USUARIO = TSession::getValue('username');
         $z->ZCM_OBS     = $p['observacoes_gerais'] ?? null;
-        $z->ZCM_STATUS  = 'F';
         $z->ZCM_TIPO    = TSession::getValue('tipo_auditoria') ?? '001';
         $z->store();
     }
@@ -410,6 +492,24 @@ class checkListForm extends TPage
             $z->store();
         }
     }
+
+    private function carregarRascunho($doc)
+{
+    // Carregar cabeçalho
+    $zcm = ZCM010::where('ZCM_DOC', '=', $doc)->first();
+    if ($zcm) {
+        $this->form->setData($zcm);
+    }
+
+    $respostas = ZCN010::where('ZCN_DOC', '=', $doc)->load();
+    foreach ($respostas as $resp) {
+        $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_TIPO;
+        $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
+    }
+    
+    TSession::setValue('checklist_dados_temp', $dados_temp);
+    TSession::setValue('doc_rascunho_atual', $doc);
+}
 
     public function onOpenCurtain($param)
     {

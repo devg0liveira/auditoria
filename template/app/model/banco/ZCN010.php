@@ -27,6 +27,5 @@ class ZCN010 extends TRecord
         parent::addAttribute('ZCN_PRAZO');
         parent::addAttribute('ZCN_STATUS');
         parent::addAttribute('ZCN_DATA_EXEC');
-        parent::addAttribute('ZCN_TIPO_AUD');
     }
 }
