@@ -94,6 +94,11 @@ class HistoricoList extends TStandardList
         $action_view->setLabel('Ver');
         $action_view->setImage('fa:eye blue');
         $this->datagrid->addAction($action_view);
+       
+        $action_continuar = new TDataGridAction(['checkListForm', 'onContinuar'], ['doc' => '{ZCM_DOC}']);
+        $action_continuar->setLabel('Continuar');
+        $action_continuar->setImage('fa:play-circle green');
+        $this->datagrid->addAction($action_continuar);
 
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onEdit'], ['doc' => '{ZCM_DOC}']);
         $action_iniciativa->setLabel('Iniciativa');
@@ -127,7 +132,7 @@ class HistoricoList extends TStandardList
         parent::add($panel);
     }
 
-    public function onToggleFilters($param = null)
+    public function onToggleFilters()
     {
         $data = new stdClass;
         $data->data_de  = TSession::getValue('hist_data_de');
