@@ -19,60 +19,83 @@ use Adianti\Widget\Base\TScript;
 class checkListForm extends TPage
 {
     protected $form;
-    private $opcoes_resposta = 
-    ['C' => 'Conforme', 
-    'NC' => 'Não Conforme', 
-    'OP' => 'Oportunidade de melhoria', 
-    'P' => 'Parcialmente',
-    'NV' => 'Não visto'];
+    private $opcoes_resposta =
+    [
+        'C'  => 'Conforme',
+        'NC' => 'Não Conforme',
+        'OP' => 'Oportunidade de melhoria',
+        'P'  => 'Parcialmente',
+        'NV' => 'Não visto'
+    ];
+
     public function __construct()
     {
         parent::__construct();
     }
-    public function onStart($param)
-    {
-        try {
-            $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
-            $doc = $param['doc'] ?? null;
-            if (!$filial) throw new Exception('Filial não informada.');
-            TSession::setValue('auditoria_filial', $filial);
-            if ($doc) {
-                TSession::setValue('view_auditoria', ['doc' => $doc]);
-                TSession::setValue('view_mode', false);
-                TSession::delValue('checklist_dados_temp');
-                TSession::delValue('checklist_pagina_atual');
-            }
-            $pagina_atual = $param['pagina'] ?? TSession::getValue('checklist_pagina_atual') ?? 0;
-            TSession::setValue('checklist_pagina_atual', $pagina_atual);
-            TTransaction::open('auditoria');
-            $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
-            if (empty($perguntas_agrupadas)) throw new Exception('Nenhuma pergunta encontrada.');
-            $dados_salvos = $this->buscarDadosSalvos();
-            TTransaction::close();
-            $this->montarFormulario($filial, $perguntas_agrupadas, $dados_salvos, $pagina_atual);
-        } catch (Exception $e) {
-            if (TTransaction::get()) TTransaction::rollback();
-            new TMessage('error', $e->getMessage());
+
+   public function onStart($param)
+{
+    try {
+        $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
+        $doc    = $param['doc'] ?? null;
+
+        if (!$filial) {
+            throw new Exception('Filial não informada.');
         }
+
+        TSession::setValue('auditoria_filial', $filial);
+
+        if ($doc) {
+            TSession::setValue('view_auditoria', ['doc' => $doc]);
+            TSession::setValue('view_mode', false);
+        }
+
+        $pagina_atual = $param['pagina'] ?? TSession::getValue('checklist_pagina_atual') ?? 0;
+        TSession::setValue('checklist_pagina_atual', $pagina_atual);
+
+        TTransaction::open('auditoria');
+        $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
+        if (empty($perguntas_agrupadas)) {
+            throw new Exception('Nenhuma pergunta encontrada.');
+        }
+
+        $dados_salvos = $this->buscarDadosSalvos();
+        TTransaction::close();
+
+        $this->montarFormulario($filial, $perguntas_agrupadas, $dados_salvos, $pagina_atual);
+
+    } catch (Exception $e) {
+        if (TTransaction::get()) {
+            TTransaction::rollback();
+        }
+        new TMessage('error', $e->getMessage());
     }
+}
+
+
     private function buscarPerguntasAgrupadasPorTipo()
     {
         $etapas = ZCL010::where('D_E_L_E_T_', '<>', '*')->load();
         if (empty($etapas)) return [];
+
         $scores = [];
         $ids = [];
         $mapa_tipo = [];
+
         foreach ($etapas as $e) {
             $ids[] = $e->ZCL_ETAPA;
             $scores[$e->ZCL_ETAPA] = (float) ($e->ZCL_SCORE ?? 0);
             $mapa_tipo[$e->ZCL_ETAPA] = $e->ZCL_TIPO ?? null;
         }
+
         $pergs = ZCJ010::where('ZCJ_ETAPA', 'IN', $ids)->where('D_E_L_E_T_', '<>', '*')->orderBy('ZCJ_ETAPA')->load();
         $tipos = ZCK010::where('D_E_L_E_T_', '<>', '*')->load();
+
         $descricao_tipos = [];
         foreach ($tipos as $t) {
             $descricao_tipos[$t->ZCK_TIPO] = $t->ZCK_DESCRI;
         }
+
         $agrupado = [];
         foreach ($pergs as $p) {
             $tipo_codigo = $mapa_tipo[$p->ZCJ_ETAPA] ?? null;
@@ -84,25 +107,32 @@ class checkListForm extends TPage
             }
             $agrupado[$tipo_desc][] = $p;
         }
+
         return $agrupado;
     }
+
     private function montarFormulario($filial, $perguntas_agrupadas, $dados_salvos, $pagina_atual)
     {
         $this->form = new BootstrapFormBuilder('form_checklist');
         $tipos = array_keys($perguntas_agrupadas);
         $total_paginas = count($tipos) + 1;
+
         if ($pagina_atual < count($tipos)) {
             $tipo_atual = $tipos[$pagina_atual];
             $titulo = "Checklist - Filial $filial - {$tipo_atual} (Etapa " . ($pagina_atual + 1) . " de {$total_paginas})";
         } else {
             $titulo = "Checklist - Filial $filial - Finalização (Etapa {$total_paginas} de {$total_paginas})";
         }
+
         $this->form->setFormTitle($titulo);
+
         $hidden_filial = new THidden('filial');
         $hidden_filial->value = $filial;
         $this->form->addFields([$hidden_filial]);
+
         $data = new stdClass();
         $data->filial = $filial;
+
         if ($pagina_atual < count($tipos)) {
             $tipo_atual = $tipos[$pagina_atual];
             $perguntas = $perguntas_agrupadas[$tipo_atual];
@@ -112,6 +142,7 @@ class checkListForm extends TPage
         } else {
             $this->renderObsGerais($dados_salvos);
         }
+
         if ($dados_salvos['readonly'] ?? false) {
             foreach ($dados_salvos['respostas'] as $etapa => $valor) {
                 $data->{"resposta_{$etapa}"} = $valor;
@@ -126,7 +157,9 @@ class checkListForm extends TPage
                 $data->$campo = $valor;
             }
         }
+
         $this->form->setData($data);
+
         if ($pagina_atual < count($tipos) && !($dados_salvos['readonly'] ?? false)) {
             $js = '';
             $perguntas = $perguntas_agrupadas[$tipo_atual] ?? [];
@@ -140,19 +173,26 @@ class checkListForm extends TPage
                 TScript::create($js);
             }
         }
+
         if (!($dados_salvos['readonly'] ?? false)) {
             $this->addNumericPagination($pagina_atual, $total_paginas);
             $this->addNavigationButtons($pagina_atual, $total_paginas);
         }
+
         parent::add($this->form);
     }
+
     private function renderPergunta($p, $dados)
     {
         $etapa = $p->ZCJ_ETAPA;
         $combo = new TCombo("resposta_{$etapa}");
         $combo->addItems($this->opcoes_resposta);
+        $combo->setSize('100%');
         $combo->addValidation("Etapa {$etapa}", new TRequiredValidator);
+
         $obs = new TText("obs_{$etapa}");
+        $obs->setSize('100%', 80);
+
         if ($dados['readonly'] ?? false) {
             $combo->setEditable(false);
             $obs->setEditable(false);
@@ -161,9 +201,16 @@ class checkListForm extends TPage
             $action->setParameter('etapa', $etapa);
             $combo->setChangeAction($action);
         }
-        $this->form->addFields([new TLabel("<b>{$p->ZCJ_DESCRI}</b>")], [$combo]);
+
+        $score_label = new TLabel("<b>Score:</b> {$p->score}");
+        if (method_exists($score_label, 'setFontColor')) {
+            $score_label->setFontColor('#666');
+        }
+
+        $this->form->addFields([new TLabel("<b>{$p->ZCJ_DESCRI}</b>")], [$combo, $score_label]);
         $this->form->addFields([new TLabel('Problemas Encontrados:')], [$obs]);
     }
+
     public static function onChangeResposta($param)
     {
         $etapa = $param['etapa'] ?? '';
@@ -173,12 +220,15 @@ class checkListForm extends TPage
             TScript::create("var field = document.getElementById('obs_{$etapa}'); if(field) field.required = " . ($required ? 'true' : 'false') . ";");
         }
     }
+
     private function renderObsGerais($dados)
     {
         $obs = new TText('observacoes_gerais');
+        $obs->setSize('100%', 120);
         if ($dados['readonly'] ?? false) $obs->setEditable(false);
         $this->form->addFields([new TLabel("<b>Observações Gerais da Auditoria:</b>")], [$obs]);
     }
+
     public function onNavigate($param)
     {
         $this->salvarDadosTemporarios($param);
@@ -198,6 +248,7 @@ class checkListForm extends TPage
         $param['filial'] = TSession::getValue('auditoria_filial');
         $this->onStart($param);
     }
+
     public function onSaveProgress($param)
     {
         try {
@@ -222,6 +273,7 @@ class checkListForm extends TPage
             new TMessage('error', $e->getMessage());
         }
     }
+
     public function onSave($param)
     {
         try {
@@ -245,6 +297,7 @@ class checkListForm extends TPage
             new TMessage('error', $e->getMessage());
         }
     }
+
     private function salvarCabecalhoCompleto($doc, $dados)
     {
         $z = ZCM010::where('ZCM_DOC', '=', $doc)->first() ?? new ZCM010;
@@ -257,16 +310,20 @@ class checkListForm extends TPage
         $z->ZCM_TIPO = TSession::getValue('tipo_auditoria') ?? '001';
         $z->store();
     }
+
     private function salvarRespostas($doc, $dados)
     {
         $perguntas = ZCJ010::orderBy('ZCJ_ETAPA')->load();
         $scores = $this->buscarScores();
+
         foreach ($perguntas as $p) {
             $etapa = $p->ZCJ_ETAPA;
             $resp = $dados["resposta_{$etapa}"] ?? null;
             if ($resp === null) continue;
+
             $z = ZCN010::where('ZCN_DOC', '=', $doc)->where('ZCN_ETAPA', '=', $etapa)->first();
             if (!$z) $z = new ZCN010;
+
             $z->ZCN_DOC = $doc;
             $z->ZCN_ETAPA = $etapa;
             $z->ZCN_DESCRI = $p->ZCJ_DESCRI;
@@ -275,16 +332,19 @@ class checkListForm extends TPage
             $z->ZCN_DATA = date('Ymd');
             $z->ZCN_HORA = date('Hi');
             $z->ZCN_USUARIO = TSession::getValue('username');
+
+            $z->ZCN_NAOCO = $resp;
+
             if (in_array($resp, ['NC', 'P', 'OP'])) {
-                $z->ZCN_NAOCO = $resp;
                 $z->ZCN_SCORE = $scores[$etapa] ?? 0;
             } else {
-                $z->ZCN_NAOCO = null;
                 $z->ZCN_SCORE = 0;
             }
+
             $z->store();
         }
     }
+
     private function buscarScores()
     {
         $etapas = ZCL010::where('D_E_L_E_T_', '<>', '*')->load();
@@ -294,11 +354,13 @@ class checkListForm extends TPage
         }
         return $scores;
     }
+
     private function gerarNovoDoc()
     {
         $ultimo = ZCM010::orderBy('ZCM_DOC', 'desc')->first();
         return $ultimo ? str_pad(((int)$ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
     }
+
     private function addNavigationButtons($pagina_atual, $total_paginas)
     {
         $row_buttons = [];
@@ -308,6 +370,7 @@ class checkListForm extends TPage
         $btn_salvar_etapa->class = 'btn btn-success';
         $btn_salvar_etapa->setAction(new TAction([$this, 'onSaveProgress']), 'Salvar Progresso');
         $row_buttons[] = $btn_salvar_etapa;
+
         if ($pagina_atual == 0) {
             $btn_inicio = new TButton('btn_inicio');
             $btn_inicio->setLabel('Voltar ao Início');
@@ -325,6 +388,7 @@ class checkListForm extends TPage
             $btn_voltar->setAction($action_voltar, 'Voltar');
             $row_buttons[] = $btn_voltar;
         }
+
         if ($pagina_atual < $total_paginas - 1) {
             $btn_proximo = new TButton('btn_proximo');
             $btn_proximo->setLabel('Próxima Etapa');
@@ -342,8 +406,10 @@ class checkListForm extends TPage
             $btn_salvar->setAction(new TAction([$this, 'onSave']), 'Finalizar');
             $row_buttons[] = $btn_salvar;
         }
+
         $this->form->addFields($row_buttons);
     }
+
     private function addNumericPagination($pagina_atual, $total_paginas)
     {
         $buttons = [];
@@ -358,6 +424,7 @@ class checkListForm extends TPage
         }
         $this->form->addFields($buttons);
     }
+
     private function salvarDadosTemporarios($param)
     {
         $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
@@ -368,11 +435,13 @@ class checkListForm extends TPage
         }
         TSession::setValue('checklist_dados_temp', $dados_temp);
     }
+
     private function buscarDadosSalvos()
     {
         $view_mode = TSession::getValue('view_mode') ?? false;
         $data = TSession::getValue('view_auditoria');
         $dados = ['readonly' => $view_mode, 'respostas' => [], 'observacoes' => [], 'obs_gerais' => ''];
+
         if ($data['doc'] ?? null) {
             $resp = ZCN010::where('ZCN_DOC', '=', $data['doc'])->where('D_E_L_E_T_', '<>', '*')->load();
             foreach ($resp as $r) {
@@ -384,38 +453,82 @@ class checkListForm extends TPage
                 $dados['obs_gerais'] = $cab->ZCM_OBS;
             }
         }
+
         return $dados;
     }
+
     public function onContinuar($param)
-    {
-        try {
-            $doc = $param['doc'] ?? null;
-            if (!$doc) {
-                throw new Exception('Documento não informado.');
-            }
-            TTransaction::open('auditoria');
-            $zcm = ZCM010::where('ZCM_DOC', '=', $doc)->where('D_E_L_E_T_', '<>', '*')->first();
-            if (!$zcm) {
-                throw new Exception('Auditoria não encontrada.');
-            }
-            $dados_temp = [];
-            $respostas = ZCN010::where('ZCN_DOC', '=', $doc)->where('D_E_L_E_T_', '<>', '*')->load();
-            foreach ($respostas as $resp) {
-                $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_TIPO;
-                $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
-            }
-            $dados_temp['observacoes_gerais'] = $zcm->ZCM_OBS ?? '';
-            TTransaction::close();
-            TSession::setValue('checklist_dados_temp', $dados_temp);
-            TSession::setValue('doc_rascunho_atual', $doc);
-            TSession::setValue('auditoria_filial', $zcm->ZCM_FILIAL);
-            TSession::setValue('checklist_pagina_atual', 0);
-            AdiantiCoreApplication::loadPage('checkListForm', 'onStart', ['filial' => $zcm->ZCM_FILIAL, 'doc' => $doc]);
-        } catch (Exception $e) {
-            if (TTransaction::get()) TTransaction::rollback();
-            new TMessage('error', $e->getMessage());
+{
+    try {
+        $doc = $param['doc'] ?? null;
+        if (!$doc) {
+            throw new Exception('Documento não informado.');
         }
+
+        TTransaction::open('auditoria');
+
+        $zcm = ZCM010::where('ZCM_DOC', '=', $doc)
+                     ->where('D_E_L_E_T_', '<>', '*')
+                     ->first();
+
+        if (!$zcm) {
+            throw new Exception('Auditoria não encontrada.');
+        }
+
+        // Carrega respostas
+        $respostas = ZCN010::where('ZCN_DOC', '=', $doc)
+                           ->where('D_E_L_E_T_', '<>', '*')
+                           ->load();
+
+        $dados_temp = [];
+        $ultimaEtapa = 0;
+
+        foreach ($respostas as $resp) {
+            $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_TIPO;
+            $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
+
+            if ($resp->ZCN_ETAPA > $ultimaEtapa) {
+                $ultimaEtapa = $resp->ZCN_ETAPA;
+            }
+        }
+
+        $dados_temp['observacoes_gerais'] = $zcm->ZCM_OBS ?? '';
+
+        // Mapear em qual página está a última etapa
+        $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
+        $tipos = array_keys($perguntas_agrupadas);
+
+        $pagina = 0;
+
+        foreach ($tipos as $i => $tipo) {
+            foreach ($perguntas_agrupadas[$tipo] as $p) {
+                if ($p->ZCJ_ETAPA == $ultimaEtapa) {
+                    $pagina = $i;
+                    break 2;
+                }
+            }
+        }
+
+        TTransaction::close();
+
+        TSession::setValue('checklist_dados_temp', $dados_temp);
+        TSession::setValue('doc_rascunho_atual', $doc);
+        TSession::setValue('auditoria_filial', $zcm->ZCM_FILIAL);
+        TSession::setValue('checklist_pagina_atual', $pagina);
+
+        AdiantiCoreApplication::loadPage(
+            'checkListForm',
+            'onStart',
+            ['filial' => $zcm->ZCM_FILIAL, 'doc' => $doc, 'pagina' => $pagina]
+        );
+
+    } catch (Exception $e) {
+        if (TTransaction::get()) TTransaction::rollback();
+        new TMessage('error', $e->getMessage());
     }
+}
+
+
     public function onOpenCurtain($param)
     {
         $win = TWindow::create('CheckList de Auditoria', 0.9, 0.9);
