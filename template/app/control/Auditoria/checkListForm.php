@@ -33,44 +33,43 @@ class checkListForm extends TPage
         parent::__construct();
     }
 
-   public function onStart($param)
-{
-    try {
-        $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
-        $doc    = $param['doc'] ?? null;
+    public function onStart($param)
+    {
+        try {
+            $filial = $param['filial'] ?? TSession::getValue('auditoria_filial');
+            $doc    = $param['doc'] ?? null;
 
-        if (!$filial) {
-            throw new Exception('Filial não informada.');
+            if (!$filial) {
+                throw new Exception('Filial não informada.');
+            }
+
+            TSession::setValue('auditoria_filial', $filial);
+
+            if ($doc) {
+                TSession::setValue('view_auditoria', ['doc' => $doc]);
+                TSession::setValue('view_mode', false);
+            }
+
+            $pagina_atual = $param['pagina'] ?? TSession::getValue('checklist_pagina_atual') ?? 0;
+            TSession::setValue('checklist_pagina_atual', $pagina_atual);
+
+            TTransaction::open('auditoria');
+            $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
+            if (empty($perguntas_agrupadas)) {
+                throw new Exception('Nenhuma pergunta encontrada.');
+            }
+
+            $dados_salvos = $this->buscarDadosSalvos();
+            TTransaction::close();
+
+            $this->montarFormulario($filial, $perguntas_agrupadas, $dados_salvos, $pagina_atual);
+        } catch (Exception $e) {
+            if (TTransaction::get()) {
+                TTransaction::rollback();
+            }
+            new TMessage('error', $e->getMessage());
         }
-
-        TSession::setValue('auditoria_filial', $filial);
-
-        if ($doc) {
-            TSession::setValue('view_auditoria', ['doc' => $doc]);
-            TSession::setValue('view_mode', false);
-        }
-
-        $pagina_atual = $param['pagina'] ?? TSession::getValue('checklist_pagina_atual') ?? 0;
-        TSession::setValue('checklist_pagina_atual', $pagina_atual);
-
-        TTransaction::open('auditoria');
-        $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
-        if (empty($perguntas_agrupadas)) {
-            throw new Exception('Nenhuma pergunta encontrada.');
-        }
-
-        $dados_salvos = $this->buscarDadosSalvos();
-        TTransaction::close();
-
-        $this->montarFormulario($filial, $perguntas_agrupadas, $dados_salvos, $pagina_atual);
-
-    } catch (Exception $e) {
-        if (TTransaction::get()) {
-            TTransaction::rollback();
-        }
-        new TMessage('error', $e->getMessage());
     }
-}
 
 
     private function buscarPerguntasAgrupadasPorTipo()
@@ -133,16 +132,6 @@ class checkListForm extends TPage
         $data = new stdClass();
         $data->filial = $filial;
 
-        if ($pagina_atual < count($tipos)) {
-            $tipo_atual = $tipos[$pagina_atual];
-            $perguntas = $perguntas_agrupadas[$tipo_atual];
-            foreach ($perguntas as $p) {
-                $this->renderPergunta($p, $dados_salvos);
-            }
-        } else {
-            $this->renderObsGerais($dados_salvos);
-        }
-
         if ($dados_salvos['readonly'] ?? false) {
             foreach ($dados_salvos['respostas'] as $etapa => $valor) {
                 $data->{"resposta_{$etapa}"} = $valor;
@@ -154,8 +143,25 @@ class checkListForm extends TPage
         } else {
             $temp = TSession::getValue('checklist_dados_temp') ?? [];
             foreach ($temp as $campo => $valor) {
-                $data->$campo = $valor;
+                if (
+                    strpos($campo, 'resposta_') === 0 ||
+                    strpos($campo, 'obs_') === 0 ||
+                    $campo === 'observacoes_gerais' ||
+                    $campo === 'filial'
+                ) {
+                    $data->$campo = $valor;
+                }
             }
+        }
+
+        if ($pagina_atual < count($tipos)) {
+            $tipo_atual = $tipos[$pagina_atual];
+            $perguntas = $perguntas_agrupadas[$tipo_atual];
+            foreach ($perguntas as $p) {
+                $this->renderPergunta($p, $dados_salvos);
+            }
+        } else {
+            $this->renderObsGerais($dados_salvos);
         }
 
         $this->form->setData($data);
@@ -457,7 +463,7 @@ class checkListForm extends TPage
         return $dados;
     }
 
-    public function onContinuar($param)
+   public function onContinuar($param)
 {
     try {
         $doc = $param['doc'] ?? null;
@@ -475,7 +481,6 @@ class checkListForm extends TPage
             throw new Exception('Auditoria não encontrada.');
         }
 
-        // Carrega respostas
         $respostas = ZCN010::where('ZCN_DOC', '=', $doc)
                            ->where('D_E_L_E_T_', '<>', '*')
                            ->load();
@@ -484,7 +489,7 @@ class checkListForm extends TPage
         $ultimaEtapa = 0;
 
         foreach ($respostas as $resp) {
-            $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_TIPO;
+            $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_NAOCO;
             $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
 
             if ($resp->ZCN_ETAPA > $ultimaEtapa) {
@@ -494,7 +499,6 @@ class checkListForm extends TPage
 
         $dados_temp['observacoes_gerais'] = $zcm->ZCM_OBS ?? '';
 
-        // Mapear em qual página está a última etapa
         $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
         $tipos = array_keys($perguntas_agrupadas);
 
@@ -515,6 +519,7 @@ class checkListForm extends TPage
         TSession::setValue('doc_rascunho_atual', $doc);
         TSession::setValue('auditoria_filial', $zcm->ZCM_FILIAL);
         TSession::setValue('checklist_pagina_atual', $pagina);
+        TSession::setValue('view_mode', false);
 
         AdiantiCoreApplication::loadPage(
             'checkListForm',
