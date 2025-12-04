@@ -49,7 +49,6 @@ class AuditoriaView extends TPage
         $this->form->addFields([new TLabel('Documento')], [$doc]);
         $this->form->addFields([new TLabel('Filial')], [$filial]);
         $this->form->addFields([new TLabel('Tipo')], [$tipo]);
-        $this->form->addFields([new TLabel('Descrição do Tipo')], [$tipo_desc]);
         $this->form->addFields([new TLabel('Data/Hora')], [$datahora]);
         $this->form->addFields([new TLabel('Usuário')], [$usuario]);
         $this->form->addFields([new TLabel('Score Final')], [$score]);
@@ -65,26 +64,17 @@ class AuditoriaView extends TPage
         $col_resposta = new TDataGridColumn('zcn_naoco', 'Conformidade', 'center', '12%');
         $col_score = new TDataGridColumn('zcl_score', 'Pontos Perdidos', 'center', '12%');
         $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
-        $col_tipo_pergunta = new TDataGridColumn('tipo_pergunta', 'Tipo', 'left', '10%');
+        $col_tipo_pergunta = new TDataGridColumn('zck_descri', 'Tipo', 'left', '10%');
 
         $col_resposta->setTransformer(function ($value) {
             $value = trim($value);
             return match ($value) {
-                'NC' => '<span style="color:red;font-weight:bold">NC - Não Conforme</span>',
-                'P'  => '<span style="color:orange;font-weight:bold">P - Parcial</span>',
-                'OP' => '<span style="color:blue;font-weight:bold">OP - Oportunidade de Melhoria</span>',
-                'C'  => '<span style="color:green;font-weight:bold">C - Conforme</span>',
-                'NV' => '<span style="color:gray;font-weight:bold">NV - Não Visto</span>',
-                default => '<span style="color:gray">-</span>'
+                'NC' => 'NC - Não Conforme',
+                'P'  => 'P - Parcial',
+                'OP' =>'OP - Oportunidade de Melhoria',
+                'C'  => 'C - Conforme</span>',
+                'NV' =>'NV - Não Visto',
             };
-        });
-
-        $col_score->setTransformer(function ($value, $object) {
-            $naoco = trim($object->zcn_naoco ?? '');
-            if (in_array($naoco, ['NC', 'P', 'OP'])) {
-                return '<span style="color:red;font-weight:bold">' . number_format($value, 0) . '</span>';
-            }
-            return '<span style="color:green">0</span>';
         });
 
         $this->datagrid->addColumn($col_etapa);
@@ -107,7 +97,6 @@ class AuditoriaView extends TPage
 
         parent::add($container);
     }
-
 public function onReload($param = null)
 {
     try {
@@ -122,11 +111,13 @@ public function onReload($param = null)
         $sql_cab = "
             SELECT ZCM_DOC, ZCM_FILIAL, ZCM_TIPO, ZCM_DATA, ZCM_HORA, ZCM_USUGIR, ZCM_OBS
             FROM ZCM010
-            WHERE ZCM_DOC = :doc AND D_E_L_E_T_ <> '*'
+            WHERE ZCM_DOC = :doc
+            AND D_E_L_E_T_ <> '*'
         ";
+
         $stmt_cab = $conn->prepare($sql_cab);
         $stmt_cab->execute([':doc' => $doc]);
-        $row_cab = $stmt_cab->fetch();
+        $row_cab = $stmt_cab->fetch(PDO::FETCH_ASSOC);
 
         if (!$row_cab) {
             throw new Exception('Auditoria não encontrada.');
@@ -135,12 +126,12 @@ public function onReload($param = null)
         $datahora = $this->formatarData($row_cab['ZCM_DATA']) . ' ' . $this->formatarHora($row_cab['ZCM_HORA']);
 
         $form_data = new stdClass;
-        $form_data->zcm_doc = trim($row_cab['ZCM_DOC']);
-        $form_data->zcm_filial = trim($row_cab['ZCM_FILIAL']);
-        $form_data->zcm_tipo = trim($row_cab['ZCM_TIPO']);
+        $form_data->zcm_doc     = trim($row_cab['ZCM_DOC']);
+        $form_data->zcm_filial  = trim($row_cab['ZCM_FILIAL']);
+        $form_data->zcm_tipo    = trim($row_cab['ZCM_TIPO']);
         $form_data->zcm_datahora = $datahora;
         $form_data->zcm_usuario = trim($row_cab['ZCM_USUGIR']);
-        $form_data->zcm_obs = trim($row_cab['ZCM_OBS'] ?? '');
+        $form_data->zcm_obs     = trim($row_cab['ZCM_OBS'] ?? '');
 
         $this->datagrid->clear();
 
@@ -150,12 +141,25 @@ public function onReload($param = null)
                 cn.ZCN_NAOCO,
                 cn.ZCN_OBS,
                 ISNULL(cl.ZCL_SCORE, 0) AS ZCL_SCORE,
+                ck.ZCK_TIPO,
+                ck.ZCK_DESCRI,
                 cj.ZCJ_DESCRI
             FROM ZCN010 cn
-            LEFT JOIN ZCL010 cl ON cl.ZCL_ETAPA = cn.ZCN_ETAPA AND cl.D_E_L_E_T_ <> '*'
-            LEFT JOIN ZCJ010 cj ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA AND cj.D_E_L_E_T_ <> '*'
+
+            LEFT JOIN ZCL010 cl 
+                ON cl.ZCL_ETAPA = cn.ZCN_ETAPA
+                AND cl.D_E_L_E_T_ <> '*'
+
+            LEFT JOIN ZCJ010 cj 
+                ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA
+                AND cj.D_E_L_E_T_ <> '*'
+
+            LEFT JOIN ZCK010 ck 
+                ON ck.ZCK_TIPO = cl.ZCL_TIPO
+                AND ck.D_E_L_E_T_ <> '*'
+
             WHERE cn.ZCN_DOC = :doc
-              AND cn.D_E_L_E_T_ <> '*'
+            AND cn.D_E_L_E_T_ <> '*'
             ORDER BY cn.ZCN_ETAPA
         ";
 
@@ -167,11 +171,12 @@ public function onReload($param = null)
 
         foreach ($rows as $row) {
             $item = (object)[
-                'zcn_etapa'   => trim($row['ZCN_ETAPA'] ?? ''),
-                'zcj_descri'  => trim($row['ZCJ_DESCRI'] ?? ''),
-                'zcn_naoco'   => trim($row['ZCN_NAOCO'] ?? ''),
-                'zcl_score'   => (int)$row['ZCL_SCORE'],
-                'zcn_obs'     => trim($row['ZCN_OBS'] ?? '')
+                'zcn_etapa'  => trim($row['ZCN_ETAPA'] ?? ''),
+                'zcj_descri' => trim($row['ZCJ_DESCRI'] ?? ''),
+                'zcn_naoco'  => trim($row['ZCN_NAOCO'] ?? ''),
+                'zcl_score'  => (int)$row['ZCL_SCORE'],
+                'zcn_obs'    => trim($row['ZCN_OBS'] ?? ''),
+                'zck_descri' => trim($row['ZCK_DESCRI'] ?? '')
             ];
 
             $this->datagrid->addItem($item);
@@ -183,15 +188,18 @@ public function onReload($param = null)
         }
 
         $form_data->score = 120 - $perda;
-
         $this->form->setData($form_data);
 
         TTransaction::close();
+
     } catch (Exception $e) {
         new TMessage('error', 'Erro ao carregar auditoria: ' . $e->getMessage());
-        if (TTransaction::get()) TTransaction::rollback();
+        if (TTransaction::get()) {
+            TTransaction::rollback();
+        }
     }
 }
+
 
 
 
