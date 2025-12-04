@@ -74,6 +74,7 @@ class AuditoriaView extends TPage
                 'OP' =>'OP - Oportunidade de Melhoria',
                 'C'  => 'C - Conforme</span>',
                 'NV' =>'NV - Não Visto',
+                default=>'',
             };
         });
 

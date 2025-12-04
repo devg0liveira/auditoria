@@ -70,7 +70,6 @@ class HistoricoList extends TStandardList
 
         $col_doc      = new TDataGridColumn('ZCM_DOC', 'Documento', 'center', '10%');
         $col_filial   = new TDataGridColumn('ZCM_FILIAL', 'Filial', 'left', '10%');
-        $col_tipo     = new TDataGridColumn('tipo_descricao', 'Tipo', 'left', '18%');
         $col_data     = new TDataGridColumn('ZCM_DATA', 'Data', 'center', '10%');
         $col_hora     = new TDataGridColumn('ZCM_HORA', 'Hora', 'center', '8%');
         $col_usuario  = new TDataGridColumn('ZCM_USUGIR', 'Usuário', 'left', '12%');
@@ -82,7 +81,6 @@ class HistoricoList extends TStandardList
 
         $this->datagrid->addColumn($col_doc);
         $this->datagrid->addColumn($col_filial);
-        $this->datagrid->addColumn($col_tipo);
         $this->datagrid->addColumn($col_data);
         $this->datagrid->addColumn($col_hora);
         $this->datagrid->addColumn($col_usuario);
