@@ -357,259 +357,185 @@ class HistoricoList extends TStandardList
     }
 
     public function ExcelExport($param)
-    {
-        try {
-            TTransaction::open('auditoria');
-            $repository = new TRepository('ZCM010');
-            $criteria = new TCriteria;
+{
+    try {
+        TTransaction::open('auditoria');
+        $repository = new TRepository('ZCM010');
+        $criteria = new TCriteria;
 
-            if (!empty($param['offset'])) {
-                $criteria->setProperty('offset', $param['offset']);
-            }
-            if (!empty($param['limit'])) {
-                $criteria->setProperty('limit', $param['limit']);
-            }
-
-            $objects = $repository->load($criteria);
-            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 300 / 7];
-
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-
-            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-            foreach ($columns as $i => $col) {
-                $sheet->getColumnDimension($col)->setWidth($widths[$i]);
-            }
-
-            $headerStyle = [
-                'font' => [
-                    'name' => 'Arial',
-                    'size' => 10,
-                    'bold' => true,
-                    'color' => ['argb' => 'FFFFFF'],
-                ],
-                'fill' => [
-                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                    'startColor' => ['argb' => '4B8BBE'],
-                ],
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
-                ],
-                'borders' => [
-                    'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        'color' => ['argb' => '000000'],
-                    ],
-                ],
-            ];
-
-            $dataStyle = [
-                'font' => [
-                    'name' => 'Arial',
-                    'size' => 9,
-                ],
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
-                ],
-                'borders' => [
-                    'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        'color' => ['argb' => 'DDDDDD'],
-                    ],
-                ],
-            ];
-
-            $numericStyle = [
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT,
-                ],
-                'numberFormat' => [
-                    'formatCode' => '#,##0.00',
-                ],
-            ];
-
-            $dateStyle = [
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                ],
-                'numberFormat' => [
-                    'formatCode' => 'dd/mm/yyyy',
-                ],
-            ];
-
-            $timeStyle = [
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                ],
-                'numberFormat' => [
-                    'formatCode' => 'hh:mm:ss',
-                ],
-            ];
-
-            $scoreStyle = [
-                'alignment' => [
-                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                ],
-                'font' => [
-                    'bold' => true,
-                ],
-                'numberFormat' => [
-                    'formatCode' => '#,##0',
-                ],
-            ];
-
-            $sheet->setCellValue('A1', 'DOCUMENTO');
-            $sheet->setCellValue('B1', 'TIPO');
-            $sheet->setCellValue('C1', 'DATA');
-            $sheet->setCellValue('D1', 'HORA');
-            $sheet->setCellValue('E1', 'USUÁRIO');
-            $sheet->setCellValue('F1', 'SCORE');
-            $sheet->setCellValue('G1', 'OBSERVAÇÃO');
-            $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
-
-            $row = 1;
-            if ($objects) {
-                foreach ($objects as $obj) {
-                    $row++;
-
-                    $doc = $this->formatarDocumento($obj->ZCM_DOC);
-                    $sheet->setCellValue('A' . $row, $doc);
-
-                    $tipo = $obj->ZCM_TIPO;
-                    if (is_numeric($tipo)) {
-                        $tipo = (string)$tipo;
-                    }
-                    $sheet->setCellValue('B' . $row, $tipo);
-
-                    $data = $obj->ZCM_DATA;
-
-                    if (!empty($data)) {
-
-                        if ($data instanceof DateTime) {
-                            $excelDate = \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel($data);
-                            $sheet->setCellValue('C' . $row, $excelDate);
-                            $sheet->getStyle('C' . $row)->applyFromArray($dateStyle);
-                            $sheet->getStyle('C' . $row)
-                                ->getNumberFormat()
-                                ->setFormatCode('dd/mm/yyyy'); 
-                        }
-
-                        elseif (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $data)) {
-                            $dt = DateTime::createFromFormat('d/m/Y', $data);
-                            if ($dt !== false) {
-                                $sheet->setCellValue('C' . $row, \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel($dt));
-                                $sheet->getStyle('C' . $row)->applyFromArray($dateStyle);
-                                $sheet->getStyle('C' . $row)
-                                    ->getNumberFormat()
-                                    ->setFormatCode('dd/mm/yyyy');
-                            }
-                        }
-
-                        elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) {
-                            $dt = DateTime::createFromFormat('Y-m-d', $data);
-                            if ($dt !== false) {
-                                $sheet->setCellValue('C' . $row, \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel($dt));
-                                $sheet->getStyle('C' . $row)->applyFromArray($dateStyle);
-                                $sheet->getStyle('C' . $row)
-                                    ->getNumberFormat()
-                                    ->setFormatCode('dd/mm/yyyy');
-                            }
-                        } else {
-                            $sheet->setCellValue('C' . $row, $data);
-                        }
-                    }
-
-
-
-                    $hora = $obj->ZCM_HORA;
-
-                    if (!empty($hora)) {
-
-                        $hora = preg_replace('/\.\d+$/', '', $hora);
-
-                        if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $hora)) {
-                            list($h, $m, $s) = array_pad(explode(':', $hora), 3, 0);
-                        }
-
-                        elseif (preg_match('/^\d{4,6}$/', $hora)) {
-                            $h = substr($hora, 0, 2);
-                            $m = substr($hora, 2, 2);
-                            $s = strlen($hora) > 4 ? substr($hora, 4, 2) : 0;
-                        } else {
-                            $sheet->setCellValue('D' . $row, $hora);
-                            continue;
-                        }
-
-                        $excelTime = ($h * 3600 + $m * 60 + $s) / 86400;
-                        $sheet->setCellValue('D' . $row, $excelTime);
-                        $sheet->getStyle('D' . $row)->applyFromArray($timeStyle);
-                    }
-
-
-                    $usuario = $obj->ZCM_USUGIR;
-                    if (is_numeric($usuario)) {
-                        $usuario = str_pad($usuario, 4, '0', STR_PAD_LEFT);
-                    }
-                    $sheet->setCellValue('E' . $row, $usuario);
-
-                    $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
-                    if (is_numeric($score)) {
-                        $sheet->setCellValue('F' . $row, $score);
-
-                        if ($score >= 90) {
-                            $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                            $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('C6EFCE');
-                            $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('006100');
-                        } elseif ($score >= 70) {
-                            $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                            $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFEB9C');
-                            $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C6500');
-                        } else {
-                            $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                            $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFC7CE');
-                            $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C0006');
-                        }
-
-                        $sheet->getStyle('F' . $row)->applyFromArray($scoreStyle);
-                    } else {
-                        $sheet->setCellValue('F' . $row, $score);
-                    }
-
-                    $obs = $obj->ZCM_OBS ?? '';
-                    if (strlen($obs) > 255) {
-                        $obs = substr($obs, 0, 252) . '...';
-                    }
-                    $sheet->setCellValue('G' . $row, $obs);
-
-                    $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
-
-                    $sheet->getRowDimension($row)->setRowHeight(-1);
-                }
-            }
-
-            $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
-
-            $sheet->freezePane('A2');
-
-            $sheet->setAutoFilter('A1:G' . $row);
-
-            foreach ($columns as $col) {
-                $sheet->getColumnDimension($col)->setAutoSize(false);
-            }
-
-            $nome = 'historico_auditoria_' . date('Ymd_His') . '.xlsx';
-            $path = 'tmp/' . $nome;
-
-            $writer = new Xlsx($spreadsheet);
-            $writer->save($path);
-
-            TPage::openFile($path);
-            TTransaction::close();
-        } catch (Exception $e) {
-            new TMessage('error', $e->getMessage());
-            TTransaction::rollback();
+        // Aplicar filtros da sessão
+        if ($de = TSession::getValue('hist_data_de')) {
+            $d = implode('', array_reverse(explode('/', $de)));
+            $criteria->add(new TFilter('ZCM_DATA', '>=', $d));
         }
+
+        if ($ate = TSession::getValue('hist_data_ate')) {
+            $d = implode('', array_reverse(explode('/', $ate)));
+            $criteria->add(new TFilter('ZCM_DATA', '<=', $d));
+        }
+
+        if ($filial = TSession::getValue('hist_filial')) {
+            $criteria->add(new TFilter('ZCM_FILIAL', '=', $filial));
+        }
+
+        if ($doc = TSession::getValue('hist_doc')) {
+            $criteria->add(new TFilter('ZCM_DOC', 'like', "%{$doc}%"));
+        }
+
+        $objects = $repository->load($criteria);
+        $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 300 / 7];
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+        foreach ($columns as $i => $col) {
+            $sheet->getColumnDimension($col)->setWidth($widths[$i]);
+        }
+
+        $headerStyle = [
+            'font' => [
+                'name' => 'Arial',
+                'size' => 10,
+                'bold' => true,
+                'color' => ['argb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['argb' => '4B8BBE'],
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['argb' => '000000'],
+                ],
+            ],
+        ];
+
+        $dataStyle = [
+            'font' => [
+                'name' => 'Arial',
+                'size' => 9,
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['argb' => 'DDDDDD'],
+                ],
+            ],
+        ];
+
+        $scoreStyle = [
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+            ],
+            'font' => [
+                'bold' => true,
+            ],
+            'numberFormat' => [
+                'formatCode' => '#,##0',
+            ],
+        ];
+
+        // Cabeçalho
+        $sheet->setCellValue('A1', 'DOCUMENTO');
+        $sheet->setCellValue('B1', 'FILIAL');
+        $sheet->setCellValue('C1', 'DATA');
+        $sheet->setCellValue('D1', 'HORA');
+        $sheet->setCellValue('E1', 'USUÁRIO');
+        $sheet->setCellValue('F1', 'SCORE');
+        $sheet->setCellValue('G1', 'OBSERVAÇÃO');
+        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+
+        $row = 1;
+        if ($objects) {
+            foreach ($objects as $obj) {
+                $row++;
+
+                // Documento - usando formatação existente
+                $doc = $this->formatarDocumento($obj->ZCM_DOC);
+                $sheet->setCellValue('A' . $row, $doc);
+
+                // Filial
+                $sheet->setCellValue('B' . $row, $obj->ZCM_FILIAL);
+
+                // Data - usando o método formatarData
+                $dataFormatada = $this->formatarData($obj->ZCM_DATA);
+                $sheet->setCellValue('C' . $row, $dataFormatada);
+
+                // Hora - usando o método formatarHora
+                $horaFormatada = $this->formatarHora($obj->ZCM_HORA);
+                $sheet->setCellValue('D' . $row, $horaFormatada);
+
+                // Usuário
+                $usuario = $obj->ZCM_USUGIR;
+                if (is_numeric($usuario)) {
+                    $usuario = str_pad($usuario, 4, '0', STR_PAD_LEFT);
+                }
+                $sheet->setCellValue('E' . $row, $usuario);
+
+                // Score com formatação condicional
+                $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
+                $sheet->setCellValue('F' . $row, $score);
+
+                if ($score >= 90) {
+                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('C6EFCE');
+                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('006100');
+                } elseif ($score >= 70) {
+                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFEB9C');
+                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C6500');
+                } else {
+                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFC7CE');
+                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C0006');
+                }
+
+                $sheet->getStyle('F' . $row)->applyFromArray($scoreStyle);
+
+                // Observação
+                $obs = $obj->ZCM_OBS ?? '';
+                if (strlen($obs) > 255) {
+                    $obs = substr($obs, 0, 252) . '...';
+                }
+                $sheet->setCellValue('G' . $row, $obs);
+
+                // Aplicar estilo da linha
+                $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
+                $sheet->getRowDimension($row)->setRowHeight(-1);
+            }
+        }
+
+        // Configurações finais
+        $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter('A1:G' . $row);
+
+        foreach ($columns as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(false);
+        }
+
+        // Salvar e abrir arquivo
+        $nome = 'historico_auditoria_' . date('Ymd_His') . '.xlsx';
+        $path = 'tmp/' . $nome;
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($path);
+
+        TPage::openFile($path);
+        TTransaction::close();
+    } catch (Exception $e) {
+        new TMessage('error', $e->getMessage());
+        TTransaction::rollback();
     }
+}
 
     private function formatarDocumento($doc)
     {
