@@ -1,4 +1,15 @@
 <?php
+
+error_reporting(E_ALL ^ E_DEPRECATED);
+
+
+use Adianti\Core\AdiantiCoreApplication;
+use Adianti\Core\AdiantiTemplateParser;
+use Adianti\Registry\TSession;
+
+
+require_once __DIR__ . '/vendor/autoload.php';
+
 require_once 'init.php';
 $theme  = $ini['general']['theme'];
 $class  = isset($_REQUEST['class']) ? $_REQUEST['class'] : '';

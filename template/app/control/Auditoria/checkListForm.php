@@ -180,9 +180,12 @@ class checkListForm extends TPage
             }
         }
 
+        $dados_temp = TSession::getValue('checklist_dados_temp') ?? [];
+        $auditoriaCompleta = $this->auditoriaCompleta($perguntas_agrupadas, $dados_salvos, $dados_temp);
+
         if (!($dados_salvos['readonly'] ?? false)) {
             $this->addNumericPagination($pagina_atual, $total_paginas);
-            $this->addNavigationButtons($pagina_atual, $total_paginas);
+            $this->addNavigationButtons($pagina_atual, $total_paginas, $auditoriaCompleta);
         }
 
         parent::add($this->form);
@@ -367,7 +370,7 @@ class checkListForm extends TPage
         return $ultimo ? str_pad(((int)$ultimo->ZCM_DOC) + 1, 6, '0', STR_PAD_LEFT) : '000001';
     }
 
-    private function addNavigationButtons($pagina_atual, $total_paginas)
+    private function addNavigationButtons($pagina_atual, $total_paginas, $auditoriaCompleta = false)
     {
         $row_buttons = [];
         $btn_salvar_etapa = new TButton('btn_salvar_etapa');
@@ -396,14 +399,16 @@ class checkListForm extends TPage
         }
 
         if ($pagina_atual < $total_paginas - 1) {
-            $btn_proximo = new TButton('btn_proximo');
-            $btn_proximo->setLabel('Próxima Etapa');
-            $btn_proximo->setImage('fa:arrow-right');
-            $btn_proximo->class = 'btn btn-primary';
-            $action_proximo = new TAction([$this, 'onNavigate']);
-            $action_proximo->setParameter('pagina', $pagina_atual + 1);
-            $btn_proximo->setAction($action_proximo, 'Próxima Etapa');
-            $row_buttons[] = $btn_proximo;
+            if (!$auditoriaCompleta) {
+                $btn_proximo = new TButton('btn_proximo');
+                $btn_proximo->setLabel('Próxima Etapa');
+                $btn_proximo->setImage('fa:arrow-right');
+                $btn_proximo->class = 'btn btn-primary';
+                $action_proximo = new TAction([$this, 'onNavigate']);
+                $action_proximo->setParameter('pagina', $pagina_atual + 1);
+                $btn_proximo->setAction($action_proximo, 'Próxima Etapa');
+                $row_buttons[] = $btn_proximo;
+            }
         } else {
             $btn_salvar = new TButton('btn_salvar');
             $btn_salvar->setLabel('Finalizar Auditoria');
@@ -463,75 +468,75 @@ class checkListForm extends TPage
         return $dados;
     }
 
-   public function onContinuar($param)
-{
-    try {
-        $doc = $param['doc'] ?? null;
-        if (!$doc) {
-            throw new Exception('Documento não informado.');
-        }
-
-        TTransaction::open('auditoria');
-
-        $zcm = ZCM010::where('ZCM_DOC', '=', $doc)
-                     ->where('D_E_L_E_T_', '<>', '*')
-                     ->first();
-
-        if (!$zcm) {
-            throw new Exception('Auditoria não encontrada.');
-        }
-
-        $respostas = ZCN010::where('ZCN_DOC', '=', $doc)
-                           ->where('D_E_L_E_T_', '<>', '*')
-                           ->load();
-
-        $dados_temp = [];
-        $ultimaEtapa = 0;
-
-        foreach ($respostas as $resp) {
-            $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_NAOCO;
-            $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
-
-            if ($resp->ZCN_ETAPA > $ultimaEtapa) {
-                $ultimaEtapa = $resp->ZCN_ETAPA;
+    public function onContinuar($param)
+    {
+        try {
+            $doc = $param['doc'] ?? null;
+            if (!$doc) {
+                throw new Exception('Documento não informado.');
             }
-        }
 
-        $dados_temp['observacoes_gerais'] = $zcm->ZCM_OBS ?? '';
+            TTransaction::open('auditoria');
 
-        $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
-        $tipos = array_keys($perguntas_agrupadas);
+            $zcm = ZCM010::where('ZCM_DOC', '=', $doc)
+                         ->where('D_E_L_E_T_', '<>', '*')
+                         ->first();
 
-        $pagina = 0;
+            if (!$zcm) {
+                throw new Exception('Auditoria não encontrada.');
+            }
 
-        foreach ($tipos as $i => $tipo) {
-            foreach ($perguntas_agrupadas[$tipo] as $p) {
-                if ($p->ZCJ_ETAPA == $ultimaEtapa) {
-                    $pagina = $i;
-                    break 2;
+            $respostas = ZCN010::where('ZCN_DOC', '=', $doc)
+                               ->where('D_E_L_E_T_', '<>', '*')
+                               ->load();
+
+            $dados_temp = [];
+            $ultimaEtapa = 0;
+
+            foreach ($respostas as $resp) {
+                $dados_temp["resposta_{$resp->ZCN_ETAPA}"] = $resp->ZCN_NAOCO;
+                $dados_temp["obs_{$resp->ZCN_ETAPA}"] = $resp->ZCN_OBS;
+
+                if ($resp->ZCN_ETAPA > $ultimaEtapa) {
+                    $ultimaEtapa = $resp->ZCN_ETAPA;
                 }
             }
+
+            $dados_temp['observacoes_gerais'] = $zcm->ZCM_OBS ?? '';
+
+            $perguntas_agrupadas = $this->buscarPerguntasAgrupadasPorTipo();
+            $tipos = array_keys($perguntas_agrupadas);
+
+            $pagina = 0;
+
+            foreach ($tipos as $i => $tipo) {
+                foreach ($perguntas_agrupadas[$tipo] as $p) {
+                    if ($p->ZCJ_ETAPA == $ultimaEtapa) {
+                        $pagina = $i;
+                        break 2;
+                    }
+                }
+            }
+
+            TTransaction::close();
+
+            TSession::setValue('checklist_dados_temp', $dados_temp);
+            TSession::setValue('doc_rascunho_atual', $doc);
+            TSession::setValue('auditoria_filial', $zcm->ZCM_FILIAL);
+            TSession::setValue('checklist_pagina_atual', $pagina);
+            TSession::setValue('view_mode', false);
+
+            AdiantiCoreApplication::loadPage(
+                'checkListForm',
+                'onStart',
+                ['filial' => $zcm->ZCM_FILIAL, 'doc' => $doc, 'pagina' => $pagina]
+            );
+
+        } catch (Exception $e) {
+            if (TTransaction::get()) TTransaction::rollback();
+            new TMessage('error', $e->getMessage());
         }
-
-        TTransaction::close();
-
-        TSession::setValue('checklist_dados_temp', $dados_temp);
-        TSession::setValue('doc_rascunho_atual', $doc);
-        TSession::setValue('auditoria_filial', $zcm->ZCM_FILIAL);
-        TSession::setValue('checklist_pagina_atual', $pagina);
-        TSession::setValue('view_mode', false);
-
-        AdiantiCoreApplication::loadPage(
-            'checkListForm',
-            'onStart',
-            ['filial' => $zcm->ZCM_FILIAL, 'doc' => $doc, 'pagina' => $pagina]
-        );
-
-    } catch (Exception $e) {
-        if (TTransaction::get()) TTransaction::rollback();
-        new TMessage('error', $e->getMessage());
     }
-}
 
 
     public function onOpenCurtain($param)
@@ -542,5 +547,42 @@ class checkListForm extends TPage
         $page->onStart($param);
         $win->add($page);
         $win->show();
+    }
+
+    private function auditoriaCompleta($perguntas_agrupadas, $dados_salvos, $dados_salvos_temp = [])
+    {
+        if ($dados_salvos['readonly'] ?? false) {
+            return true;
+        }
+
+        foreach ($perguntas_agrupadas as $grupo) {
+            foreach ($grupo as $p) {
+                $etapa = $p->ZCJ_ETAPA;
+
+                $resposta = $dados_salvos['respostas'][$etapa] 
+                    ?? ($dados_salvos_temp["resposta_{$etapa}"] ?? '');
+
+                if (trim((string)$resposta) === '') {
+                    return false;
+                }
+
+                if (in_array($resposta, ['NC','P','OP'])) {
+                    $obs = $dados_salvos['observacoes'][$etapa] 
+                        ?? ($dados_salvos_temp["obs_{$etapa}"] ?? '');
+
+                    if (trim((string)$obs) === '') {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        $obs_geral = $dados_salvos['obs_gerais'] ?? ($dados_salavos_temp['observacoes_gerais'] ?? '');
+
+        if (trim((string)$obs_geral) === '') {
+            return false;
+        }
+
+        return true;
     }
 }
