@@ -127,12 +127,30 @@
         </menu>
     </menuitem>
 
-    <menuitem label='Exportar Excel'>
+    <menuitem label='Loja'>
         <icon>fa-table</icon>
         <menu>
-            <menuitem label='Excel'>
+            <menuitem label='ProdutoForm'>
                 <icon>fas:file-alt fa-fw</icon>
-                <action>expExcel</action>
+                <action>ProdutoForm</action>
+            </menuitem>
+            <menuitem label='Lista de Produtos'>
+                <icon>fas:file-alt fa-fw</icon>
+                <action>ProdutoList</action>
+            </menuitem>
+        </menu>
+    </menuitem>
+
+    <menuitem label='Treino'>
+        <icon>fa-table</icon>
+        <menu>
+            <menuitem label='Cadastro'>
+                <icon>fas:file-alt fa-fw</icon>
+                <action>Cadastro</action>
+            </menuitem>
+            <menuitem label='Lista de usuarios'>
+                <icon>fas:file-alt fa-fw</icon>
+                <action>Page</action>
             </menuitem>
         </menu>
     </menuitem>

@@ -15,6 +15,7 @@ use Adianti\Widget\Form\TButton;
 use Adianti\Widget\Form\THidden;
 use Adianti\Widget\Form\TText;
 use Adianti\Widget\Base\TScript;
+use Adianti\Widget\Dialog\TQuestion;
 
 class checkListForm extends TPage
 {
@@ -283,6 +284,13 @@ class checkListForm extends TPage
         }
     }
 
+    public function onConfirmSave($param)
+    {
+        $action = new TAction([$this, 'onSave']);
+        $action->setParameters($param);
+        new TQuestion('Deseja finalizar a auditoria e salvar todas as respostas?', $action);
+    }
+
     public function onSave($param)
     {
         try {
@@ -316,7 +324,6 @@ class checkListForm extends TPage
         $z->ZCM_HORA = date('Hi');
         $z->ZCM_USUARIO = TSession::getValue('username');
         $z->ZCM_OBS = $dados['observacoes_gerais'] ?? ($z->ZCM_OBS ?? '');
-        $z->ZCM_TIPO = TSession::getValue('tipo_auditoria') ?? '001';
         $z->store();
     }
 
@@ -374,10 +381,10 @@ class checkListForm extends TPage
     {
         $row_buttons = [];
         $btn_salvar_etapa = new TButton('btn_salvar_etapa');
-        $btn_salvar_etapa->setLabel('Salvar Progresso');
+        $btn_salvar_etapa->setLabel('Salvar e Sair');
         $btn_salvar_etapa->setImage('fa:save');
         $btn_salvar_etapa->class = 'btn btn-success';
-        $btn_salvar_etapa->setAction(new TAction([$this, 'onSaveProgress']), 'Salvar Progresso');
+        $btn_salvar_etapa->setAction(new TAction([$this, 'onSaveProgress']), 'Salvar e Sair');
         $row_buttons[] = $btn_salvar_etapa;
 
         if ($pagina_atual == 0) {
@@ -414,7 +421,7 @@ class checkListForm extends TPage
             $btn_salvar->setLabel('Finalizar Auditoria');
             $btn_salvar->setImage('fa:check');
             $btn_salvar->class = 'btn btn-success';
-            $btn_salvar->setAction(new TAction([$this, 'onSave']), 'Finalizar');
+            $btn_salvar->setAction(new TAction([$this, 'onConfirmSave']), 'Finalizar');
             $row_buttons[] = $btn_salvar;
         }
 

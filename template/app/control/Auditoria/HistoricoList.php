@@ -363,7 +363,6 @@ class HistoricoList extends TStandardList
         $repository = new TRepository('ZCM010');
         $criteria = new TCriteria;
 
-        // Aplicar filtros da sessão
         if ($de = TSession::getValue('hist_data_de')) {
             $d = implode('', array_reverse(explode('/', $de)));
             $criteria->add(new TFilter('ZCM_DATA', '>=', $d));
@@ -443,7 +442,6 @@ class HistoricoList extends TStandardList
             ],
         ];
 
-        // Cabeçalho
         $sheet->setCellValue('A1', 'DOCUMENTO');
         $sheet->setCellValue('B1', 'FILIAL');
         $sheet->setCellValue('C1', 'DATA');
@@ -458,29 +456,23 @@ class HistoricoList extends TStandardList
             foreach ($objects as $obj) {
                 $row++;
 
-                // Documento - usando formatação existente
                 $doc = $this->formatarDocumento($obj->ZCM_DOC);
                 $sheet->setCellValue('A' . $row, $doc);
 
-                // Filial
                 $sheet->setCellValue('B' . $row, $obj->ZCM_FILIAL);
 
-                // Data - usando o método formatarData
                 $dataFormatada = $this->formatarData($obj->ZCM_DATA);
                 $sheet->setCellValue('C' . $row, $dataFormatada);
 
-                // Hora - usando o método formatarHora
                 $horaFormatada = $this->formatarHora($obj->ZCM_HORA);
                 $sheet->setCellValue('D' . $row, $horaFormatada);
 
-                // Usuário
                 $usuario = $obj->ZCM_USUGIR;
                 if (is_numeric($usuario)) {
                     $usuario = str_pad($usuario, 4, '0', STR_PAD_LEFT);
                 }
                 $sheet->setCellValue('E' . $row, $usuario);
 
-                // Score com formatação condicional
                 $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
                 $sheet->setCellValue('F' . $row, $score);
 
@@ -500,20 +492,17 @@ class HistoricoList extends TStandardList
 
                 $sheet->getStyle('F' . $row)->applyFromArray($scoreStyle);
 
-                // Observação
                 $obs = $obj->ZCM_OBS ?? '';
                 if (strlen($obs) > 255) {
                     $obs = substr($obs, 0, 252) . '...';
                 }
                 $sheet->setCellValue('G' . $row, $obs);
 
-                // Aplicar estilo da linha
                 $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
                 $sheet->getRowDimension($row)->setRowHeight(-1);
             }
         }
 
-        // Configurações finais
         $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
         $sheet->freezePane('A2');
         $sheet->setAutoFilter('A1:G' . $row);
@@ -522,7 +511,6 @@ class HistoricoList extends TStandardList
             $sheet->getColumnDimension($col)->setAutoSize(false);
         }
 
-        // Salvar e abrir arquivo
         $nome = 'historico_auditoria_' . date('Ymd_His') . '.xlsx';
         $path = 'tmp/' . $nome;
 

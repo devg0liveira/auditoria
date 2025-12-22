@@ -29,7 +29,6 @@ class AuditoriaView extends TPage
 
         $doc = new TEntry('zcm_doc');
         $filial = new TEntry('zcm_filial');
-        $tipo = new TEntry('zcm_tipo');
         $tipo_desc = new TEntry('tipo_descricao');
         $datahora = new TEntry('zcm_datahora');
         $usuario = new TEntry('zcm_usuario');
@@ -38,7 +37,6 @@ class AuditoriaView extends TPage
 
         $doc->setEditable(false);
         $filial->setEditable(false);
-        $tipo->setEditable(false);
         $tipo_desc->setEditable(false);
         $datahora->setEditable(false);
         $usuario->setEditable(false);
@@ -48,7 +46,6 @@ class AuditoriaView extends TPage
 
         $this->form->addFields([new TLabel('Documento')], [$doc]);
         $this->form->addFields([new TLabel('Filial')], [$filial]);
-        $this->form->addFields([new TLabel('Tipo')], [$tipo]);
         $this->form->addFields([new TLabel('Data/Hora')], [$datahora]);
         $this->form->addFields([new TLabel('Usuário')], [$usuario]);
         $this->form->addFields([new TLabel('Score Final')], [$score]);
@@ -62,7 +59,7 @@ class AuditoriaView extends TPage
         $col_etapa = new TDataGridColumn('zcn_etapa', 'Etapa', 'left', '8%');
         $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left', '28%');
         $col_resposta = new TDataGridColumn('zcn_naoco', 'Conformidade', 'center', '12%');
-        $col_score = new TDataGridColumn('zcl_score', 'Pontos Perdidos', 'center', '12%');
+        $col_score = new TDataGridColumn('zcl_score', 'Pontos', 'center', '12%');
         $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
         $col_tipo_pergunta = new TDataGridColumn('zck_descri', 'Tipo', 'left', '10%');
 

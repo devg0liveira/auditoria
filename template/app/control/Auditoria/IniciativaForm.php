@@ -9,6 +9,7 @@ use Adianti\Widget\Form\TDate;
 use Adianti\Widget\Form\TCombo;
 use Adianti\Widget\Form\THidden;
 use Adianti\Widget\Dialog\TMessage;
+use Adianti\Widget\Dialog\TQuestion;
 use Adianti\Database\TTransaction;
 use Adianti\Core\AdiantiCoreApplication;
 use Adianti\Validator\TMinLengthValidator;
@@ -24,75 +25,68 @@ class IniciativaForm extends TPage
         parent::__construct();
 
         $this->form = new BootstrapFormBuilder('form_iniciativa');
-        $this->form->setFormTitle('Plano de Ação - Iniciativas de Melhoria');
+        $this->form->setFormTitle('Plano de Ação – Iniciativas de Melhoria');
 
-        $this->form->addHeaderAction('Voltar', new TAction(['HistoricoList', 'onReload']));
-        $this->form->addHeaderAction('Salvar', new TAction([$this, 'onSave']));
+        $this->form->addHeaderAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left red');
+        $this->form->addHeaderAction('Salvar alterações', new TAction([$this, 'onConfirmSave']), 'fa:save green');
     }
 
     public function onEdit(array $param)
     {
         try {
             $doc = $param['doc'] ?? null;
+
             if (!$doc || trim($doc) === '') {
-                throw new Exception('Documento não informado.');
+                throw new Exception('Auditoria não identificada.');
             }
 
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
 
-            $sql = "
+            $stmt = $conn->prepare("
                 SELECT 
                     cn.ZCN_ETAPA,
                     ISNULL(cn.ZCN_SEQ, '001') AS ZCN_SEQ,
                     ISNULL(cj.ZCJ_DESCRI, 'Sem descrição') AS ZCJ_DESCRI,
-                    cn.ZCN_NAOCO,
                     ISNULL(cn.ZCN_ACAO, '') AS ZCN_ACAO,
                     ISNULL(cn.ZCN_RESP, '') AS ZCN_RESP,
                     cn.ZCN_PRAZO,
                     cn.ZCN_DATA_EXEC,
                     ISNULL(cn.ZCN_STATUS, 'A') AS ZCN_STATUS,
-                    ISNULL(cn.ZCN_OBS, '') AS ZCN_OBS,
-                    ISNULL(cl.ZCL_SCORE, 0) AS SCORE_PERDIDO
+                    ISNULL(cn.ZCN_OBS, '') AS ZCN_OBS
                 FROM ZCN010 cn
                 INNER JOIN ZCJ010 cj 
                     ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA 
                     AND cj.D_E_L_E_T_ <> '*'
-                LEFT JOIN ZCL010 cl 
-                    ON cl.ZCL_ETAPA = cn.ZCN_ETAPA 
-                    AND cl.D_E_L_E_T_ <> '*'
                 WHERE cn.ZCN_DOC = :doc 
                   AND cn.ZCN_NAOCO IN ('NC', 'P', 'OP')
                   AND cn.D_E_L_E_T_ <> '*'
                 ORDER BY cn.ZCN_ETAPA, cn.ZCN_SEQ
-            ";
+            ");
 
-            $stmt = $conn->prepare($sql);
             $stmt->execute([':doc' => $doc]);
             $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($ncs)) {
                 TTransaction::close();
-                new TMessage('info', 'Nenhuma não conformidade encontrada.');
+                new TMessage('info', 'Nenhum item pendente encontrado.');
                 AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
                 return;
             }
 
-            $tem_concluido = false;
-            foreach ($ncs as $nc) {
-                if ($nc['ZCN_STATUS'] === 'C') {
-                    $tem_concluido = true;
-                    break;
-                }
-            }
-
             $this->form->clear();
 
-            $this->form->addContent(["Auditoria: {$doc}<br>Total: " . count($ncs)]);
+            $total = count($ncs);
+            $concluidos = count(array_filter($ncs, fn($n) => $n['ZCN_STATUS'] === 'C'));
+            $pendentes = $total - $concluidos;
 
-            if ($tem_concluido) {
-                $this->form->addContent(["Itens concluídos presentes."]);
-            }
+            $this->form->addContent([
+                "<b>Auditoria:</b> {$doc}<br>
+                 <span class='badge badge-secondary'>Total: {$total}</span>
+                 <span class='badge badge-warning'>Em andamento: {$pendentes}</span>
+                 <span class='badge badge-success'>Concluídos: {$concluidos}</span>
+                 <hr>"
+            ]);
 
             $hiddenDoc = new THidden('doc');
             $hiddenDoc->setValue($doc);
@@ -100,100 +94,104 @@ class IniciativaForm extends TPage
 
             $contador = 1;
             foreach ($ncs as $nc) {
-                $this->renderNaoConformidade($nc, $contador, $tem_concluido);
+                $this->renderNaoConformidade($nc, $contador);
                 $contador++;
             }
-
-            $total_pendentes = 0;
-            $total_concluidos = 0;
-            foreach ($ncs as $nc) {
-                if ($nc['ZCN_STATUS'] === 'C') {
-                    $total_concluidos++;
-                } else {
-                    $total_pendentes++;
-                }
-            }
-
-            $this->form->addContent([
-                "Resumo:<br>
-                 Total: " . count($ncs) . "<br>
-                 Em andamento: {$total_pendentes}<br>
-                 Concluídos: {$total_concluidos}"
-            ]);
 
             TTransaction::close();
             parent::add($this->form);
 
         } catch (Exception $e) {
-            new TMessage('error', 'Erro ao carregar: ' . $e->getMessage());
             if (TTransaction::get()) {
                 TTransaction::rollback();
             }
+            new TMessage('error', 'Não foi possível carregar o plano de ação.');
         }
     }
 
-    private function renderNaoConformidade($nc, $numero, $readonly = false)
+    private function renderNaoConformidade($nc, $numero)
     {
-        $etapa = trim($nc['ZCN_ETAPA']);
-        $seq   = trim($nc['ZCN_SEQ']);
-        $key   = "{$etapa}_{$seq}";
+        $etapa  = trim($nc['ZCN_ETAPA']);
+        $seq    = trim($nc['ZCN_SEQ']);
+        $key    = "{$etapa}_{$seq}";
         $status = $nc['ZCN_STATUS'];
+        $readonly = ($status === 'C');
 
-        $this->form->addContent(["Item {$numero} - Etapa {$etapa} - " . htmlspecialchars($nc['ZCJ_DESCRI'])]);
+        $badge = $status === 'C'
+            ? "<span class='badge badge-success'>Concluído</span>"
+            : "<span class='badge badge-warning'>Em andamento</span>";
+
+        $this->form->addContent([
+            "<details open>
+                <summary>
+                    <b>Item {$numero} – Etapa {$etapa}</b> {$badge}<br>
+                    {$nc['ZCJ_DESCRI']}
+                </summary><br>"
+        ]);
 
         $acao = new TText("acao_{$key}");
         $acao->setSize('100%', 80);
+        $acao->setValue($nc['ZCN_ACAO']);
+        $acao->setEditable(!$readonly);
         if (!$readonly) {
             $acao->addValidation('Ação', new TRequiredValidator);
-            $acao->addValidation('Ação', new TMinLengthValidator, [10]);
+            $acao->addValidation('Ação', new TMinLengthValidator, [1]);
         }
-        $acao->setValue($nc['ZCN_ACAO']);
-        $acao->setEditable(!$readonly && $status !== 'C');
 
         $resp = new TEntry("resp_{$key}");
         $resp->setSize('100%');
+        $resp->setValue($nc['ZCN_RESP']);
+        $resp->setEditable(!$readonly);
         if (!$readonly) {
             $resp->addValidation('Responsável', new TRequiredValidator);
-            $resp->addValidation('Responsável', new TMinLengthValidator, [3]);
+            $resp->addValidation('Responsável', new TMinLengthValidator, [1]);
         }
-        $resp->setValue($nc['ZCN_RESP']);
-        $resp->setEditable(!$readonly && $status !== 'C');
 
         $prazo = new TDate("prazo_{$key}");
         $prazo->setMask('dd/mm/yyyy');
         $prazo->setSize('100%');
+        $prazo->setValue($this->formatDate($nc['ZCN_PRAZO']));
+        $prazo->setEditable(!$readonly);
         if (!$readonly) {
             $prazo->addValidation('Prazo', new TRequiredValidator);
         }
-        $prazo->setValue($this->formatDate($nc['ZCN_PRAZO']));
-        $prazo->setEditable(!$readonly && $status !== 'C');
 
         $exec = new TDate("exec_{$key}");
         $exec->setMask('dd/mm/yyyy');
         $exec->setSize('100%');
         $exec->setValue($this->formatDate($nc['ZCN_DATA_EXEC']));
-        $exec->setEditable(!$readonly && $status !== 'C');
+        $exec->setEditable(!$readonly);
 
         $status_combo = new TCombo("status_{$key}");
         $status_combo->addItems([
-            'A' => 'Em Andamento',
+            'A' => 'Em andamento',
             'C' => 'Concluído'
         ]);
         $status_combo->setSize('100%');
         $status_combo->setValue($status);
-        $status_combo->setEditable(!$readonly && $status !== 'C');
+        $status_combo->setEditable(!$readonly);
 
         $obs = new TText("obs_{$key}");
         $obs->setSize('100%', 60);
         $obs->setValue($nc['ZCN_OBS']);
         $obs->setEditable(false);
 
-        $this->form->addFields([new TLabel('Ação')], [$acao]);
-        $this->form->addFields([new TLabel('Responsável')], [$resp]);
-        $this->form->addFields([new TLabel('Prazo')], [$prazo]);
-        $this->form->addFields([new TLabel('Data Execução')], [$exec]);
-        $this->form->addFields([new TLabel('Status')], [$status_combo]);
+        $this->form->addFields([new TLabel('Ação *')], [$acao]);
+        $this->form->addFields([new TLabel('Responsável *')], [$resp]);
+        $this->form->addFields([new TLabel('Prazo *')], [$prazo]);
+        $this->form->addFields([new TLabel('Data de execução')], [$exec]);
+        $this->form->addFields([new TLabel('Status *')], [$status_combo]);
         $this->form->addFields([new TLabel('Observações')], [$obs]);
+
+        $this->form->addContent(["</details><hr>"]);
+    }
+
+    public function onConfirmSave($param)
+    {
+        $actionYes = new TAction([$this, 'onSave']);
+        $actionYes->setParameters($param);
+
+        new TQuestion('Deseja salvar as alterações do plano de ação?', $actionYes);
     }
 
     public function onSave($param)
@@ -203,32 +201,9 @@ class IniciativaForm extends TPage
             $conn = TTransaction::get();
 
             $doc = $param['doc'] ?? null;
+
             if (!$doc) {
-                throw new Exception('Documento não informado.');
-            }
-
-            $stmt = $conn->prepare("
-                SELECT ZCN_STATUS, ZCN_ETAPA 
-                FROM ZCN010 
-                WHERE ZCN_DOC = ? 
-                  AND ZCN_NAOCO IN ('NC', 'P', 'OP')
-                  AND D_E_L_E_T_ <> '*'
-            ");
-            $stmt->execute([$doc]);
-            $ncs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            $total_concluidos = 0;
-            foreach ($ncs as $nc) {
-                if ($nc['ZCN_STATUS'] == 'C') {
-                    $total_concluidos++;
-                }
-            }
-
-            if ($total_concluidos === count($ncs) && count($ncs) > 0) {
-                new TMessage('warning', 'Todos os itens já estão concluídos.');
-                TTransaction::close();
-                AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
-                return;
+                throw new Exception('Auditoria não identificada.');
             }
 
             $erros = [];
@@ -236,20 +211,14 @@ class IniciativaForm extends TPage
 
             foreach ($param as $key => $value) {
                 if (strpos($key, 'acao_') === 0) {
-                    $parts = explode('_', $key);
-                    $etapa = $parts[1] ?? null;
-                    $seq   = $parts[2] ?? '001';
-
-                    if (!$etapa) continue;
+                    [, $etapa, $seq] = array_pad(explode('_', $key), 3, '001');
 
                     $zcn = ZCN010::where('ZCN_DOC', '=', $doc)
                         ->where('ZCN_ETAPA', '=', $etapa)
                         ->where('ZCN_SEQ', '=', $seq)
                         ->first();
 
-                    if (!$zcn) continue;
-
-                    if ($zcn->ZCN_STATUS === 'C') {
+                    if (!$zcn || $zcn->ZCN_STATUS === 'C') {
                         continue;
                     }
 
@@ -257,35 +226,25 @@ class IniciativaForm extends TPage
                     $resp  = trim($param["resp_{$etapa}_{$seq}"] ?? '');
                     $prazo = trim($param["prazo_{$etapa}_{$seq}"] ?? '');
 
-                    if (empty($acao)) {
-                        $erros[] = "Etapa {$etapa}: Ação obrigatória.";
+                    if ($acao === '' || strlen($acao) < 10) {
+                        $erros[] = "Item {$etapa}: Ação obrigatória (mín. 10 caracteres).";
                         continue;
                     }
 
-                    if (strlen($acao) < 10) {
-                        $erros[] = "Etapa {$etapa}: Ação deve ter mínimo 10 caracteres.";
+                    if ($resp === '' || strlen($resp) < 3) {
+                        $erros[] = "Item {$etapa}: Responsável obrigatório.";
                         continue;
                     }
 
-                    if (empty($resp)) {
-                        $erros[] = "Etapa {$etapa}: Responsável obrigatório.";
-                        continue;
-                    }
-
-                    if (strlen($resp) < 3) {
-                        $erros[] = "Etapa {$etapa}: Responsável deve ter mínimo 3 caracteres.";
-                        continue;
-                    }
-
-                    if (empty($prazo)) {
-                        $erros[] = "Etapa {$etapa}: Prazo obrigatório.";
+                    if ($prazo === '') {
+                        $erros[] = "Item {$etapa}: Prazo obrigatório.";
                         continue;
                     }
 
                     $zcn->ZCN_ACAO      = $acao;
                     $zcn->ZCN_RESP      = $resp;
                     $zcn->ZCN_PRAZO     = self::toDbDate($prazo);
-                    $zcn->ZCN_DATA_EXEC = self::toDbDate(trim($param["exec_{$etapa}_{$seq}"] ?? ''));
+                    $zcn->ZCN_DATA_EXEC = self::toDbDate($param["exec_{$etapa}_{$seq}"] ?? '');
                     $zcn->ZCN_STATUS    = $param["status_{$etapa}_{$seq}"] ?? 'A';
                     $zcn->store();
 
@@ -295,33 +254,33 @@ class IniciativaForm extends TPage
 
             if (!empty($erros)) {
                 TTransaction::rollback();
-                new TMessage('error', implode("<br>", $erros));
+                new TMessage('error', implode('<br>', $erros));
                 return;
             }
 
             if ($salvos === 0) {
                 TTransaction::rollback();
-                new TMessage('warning', 'Nenhuma alteração realizada.');
+                new TMessage('warning', 'Nenhuma alteração foi realizada.');
                 return;
             }
 
             TTransaction::close();
 
-            new TMessage('info', "Plano de ação salvo. Itens atualizados: {$salvos}");
+            new TMessage('info', "Plano de ação salvo com sucesso. Itens atualizados: {$salvos}");
             AdiantiCoreApplication::loadPage('HistoricoList', 'onReload');
 
         } catch (Exception $e) {
-            new TMessage('error', 'Erro ao salvar: ' . $e->getMessage());
             if (TTransaction::get()) {
                 TTransaction::rollback();
             }
+            new TMessage('error', 'Erro ao salvar o plano de ação.');
         }
     }
 
     private static function toDbDate($date)
     {
         $date = trim($date ?? '');
-        if ($date === '' || $date === null) {
+        if ($date === '') {
             return null;
         }
 
@@ -345,3 +304,4 @@ class IniciativaForm extends TPage
         return '';
     }
 }
+

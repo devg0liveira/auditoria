@@ -82,7 +82,6 @@ class inicioAuditoriaModal extends TPage
             }
 
             TSession::setValue('auditoria_filial', $param['filial']);
-            // Não precisamos mais do tipo aqui
 
             TScript::create("
                 __adianti_load_page('index.php?class=checkListForm&method=onStart&filial={$param['filial']}');

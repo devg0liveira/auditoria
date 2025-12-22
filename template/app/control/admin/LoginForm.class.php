@@ -1,4 +1,7 @@
 <?php
+
+use Adianti\Control\TPage;
+
 /**
  * LoginForm
  *
