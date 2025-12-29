@@ -226,8 +226,8 @@ class IniciativaForm extends TPage
                     $resp  = trim($param["resp_{$etapa}_{$seq}"] ?? '');
                     $prazo = trim($param["prazo_{$etapa}_{$seq}"] ?? '');
 
-                    if ($acao === '' || strlen($acao) < 10) {
-                        $erros[] = "Item {$etapa}: Ação obrigatória (mín. 10 caracteres).";
+                    if ($acao === '' || strlen($acao) < 1) {
+                        $erros[] = "Item {$etapa}: Ação obrigatória (mín. 1 caractere).";
                         continue;
                     }
 
@@ -304,4 +304,3 @@ class IniciativaForm extends TPage
         return '';
     }
 }
-

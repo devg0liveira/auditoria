@@ -19,7 +19,7 @@ use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Form\TDate;
 use Adianti\Widget\Form\TEntry;
 use Adianti\Widget\Form\TLabel;
-use Adianti\Widget\Base\TScript;
+use Adianti\Widget\Form\TButton;
 use Adianti\Wrapper\BootstrapDatagridWrapper;
 use Adianti\Wrapper\BootstrapFormBuilder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -83,7 +83,8 @@ class HistoricoList extends TStandardList
         $this->form->addAction('Limpar', new TAction([$this, 'onClear']), 'fa:eraser red');
         $this->form->addAction('Pesquisar', new TAction([$this, 'onSearch']), 'fa:search blue');
 
-        $this->form->style = 'display:none';
+        $this->form->style = 'display:none; width: 100%; overflow-x: auto;';
+
     }
 
     private function buildDatagrid()
@@ -120,6 +121,7 @@ class HistoricoList extends TStandardList
         $action_continuar = new TDataGridAction(['checkListForm', 'onContinuar'], ['doc' => '{ZCM_DOC}']);
         $action_continuar->setLabel('Continuar');
         $action_continuar->setImage('fa:play-circle green');
+        $action_continuar->setDisplayCondition([$this, 'auditoriaIncompleta']);
         $this->datagrid->addAction($action_continuar);
 
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onEdit'], ['doc' => '{ZCM_DOC}']);
@@ -132,30 +134,43 @@ class HistoricoList extends TStandardList
     }
 
     private function buildPanel()
-    {
-        $this->pageNavigation = new TPageNavigation();
-        $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
+{
+    $this->pageNavigation = new TPageNavigation();
+    $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
 
-        $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
-        $panel->add($this->form);
-        $panel->add($this->datagrid);
-        $panel->addFooter($this->pageNavigation);
+    $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
 
-        $panel->addHeaderActionLink('Filtros', new TAction([$this, 'onToggleFilters']), 'fa:filter white')
-            ->class = 'btn btn-primary btn-sm';
+    $panel->getBody()->style = 'overflow-x: auto';
 
-        $panel->addHeaderActionLink('Nova Auditoria', new TAction(['inicioAuditoriaModal', 'onLoad']), 'fa:plus-circle green');
+    $panel->add($this->form);
+    $panel->add($this->datagrid);
+    $panel->addFooter($this->pageNavigation);
 
-        $action = new TAction([$this, 'ExcelExport']);
-        $action->setParameter('register_state', 'false');
+    $filter_link = new TButton('filter_button');
+    $filter_link->class = 'btn btn-primary btn-sm';
+    $filter_link->setLabel('Filtros');
+    $filter_link->setImage('fa:filter');
+    $filter_link->onclick = "$('[name=form_filtro_historico]').slideToggle('medium');
+                          $(this).toggleClass('active');";
 
-        $panel->addHeaderActionLink(
-            '<i class="fas fa-file-excel" style="margin-right: 5px;"></i> Exportar XLS',
-            $action
-        )->class = 'btn btn-success btn-sm';
+    $panel->addHeaderWidget($filter_link);
 
-        parent::add($panel);
-    }
+    $panel->addHeaderActionLink(
+        'Nova Auditoria',
+        new TAction(['inicioAuditoriaModal', 'onLoad']),
+        'fa:plus-circle green'
+    );
+
+    $action = new TAction([$this, 'ExcelExport']);
+    $action->setParameter('register_state', 'false');
+
+    $panel->addHeaderActionLink(
+        '<i style="margin-right: 5px;"></i> Exportar XLS',
+        $action
+    )->class = 'btn btn-success btn-sm';
+
+    parent::add($panel);
+}
 
 
     public function onToggleFilters()
@@ -167,11 +182,8 @@ class HistoricoList extends TStandardList
         $data->doc      = TSession::getValue('hist_doc');
 
         $this->form->setData($data);
-
-        TScript::create("
-            $('#form_filtro_historico').slideToggle(300);
-        ");
     }
+
 
     public function onSearch($param = null)
     {
@@ -184,7 +196,6 @@ class HistoricoList extends TStandardList
 
         $this->form->setData($data);
 
-        TScript::create("$('#form_filtro_historico').slideUp(300);");
 
         $this->onReload($param);
     }
@@ -198,7 +209,6 @@ class HistoricoList extends TStandardList
         TSession::setValue('hist_filial',   null);
         TSession::setValue('hist_doc',      null);
 
-        TScript::create("$('#form_filtro_historico').slideUp(300);");
 
         $this->onReload($param);
     }
@@ -331,6 +341,49 @@ class HistoricoList extends TStandardList
         return $this->planoEstaPendente($object->ZCM_DOC);
     }
 
+    public function auditoriaIncompleta($object)
+    {
+        try {
+            TTransaction::open('auditoria');
+
+            $totalPerguntas = ZCJ010::where('D_E_L_E_T_', '<>', '*')->count();
+
+            $respostas = ZCN010::where('ZCN_DOC', '=', $object->ZCM_DOC)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->count();
+
+            if ($respostas < $totalPerguntas) {
+                TTransaction::close();
+                return true;
+            }
+
+            $conn = TTransaction::get();
+            $sql = "SELECT COUNT(*) as total FROM ZCN010 WHERE ZCN_DOC = :doc AND ZCN_NAOCO IN ('NC','P','OP') AND (ZCN_OBS IS NULL OR TRIM(ZCN_OBS) = '') AND D_E_L_E_T_ <> '*'";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([':doc' => $object->ZCM_DOC]);
+            $result = $stmt->fetch();
+
+            if ($result['total'] > 0) {
+                TTransaction::close();
+                return true;
+            }
+
+            $zcm = ZCM010::find($object->ZCM_DOC);
+            if (!$zcm || empty(trim($zcm->ZCM_OBS))) {
+                TTransaction::close();
+                return true;
+            }
+
+            TTransaction::close();
+            return false;
+        } catch (Exception $e) {
+            if (TTransaction::get()) {
+                TTransaction::rollback();
+            }
+            return false;
+        }
+    }
+
 
     public function formatarData($value)
     {
@@ -357,173 +410,157 @@ class HistoricoList extends TStandardList
     }
 
     public function ExcelExport($param)
-{
-    try {
-        TTransaction::open('auditoria');
-        $repository = new TRepository('ZCM010');
-        $criteria = new TCriteria;
+    {
+        try {
+            TTransaction::open('auditoria');
+            $repository = new TRepository('ZCM010');
+            $criteria = new TCriteria;
 
-        if ($de = TSession::getValue('hist_data_de')) {
-            $d = implode('', array_reverse(explode('/', $de)));
-            $criteria->add(new TFilter('ZCM_DATA', '>=', $d));
-        }
-
-        if ($ate = TSession::getValue('hist_data_ate')) {
-            $d = implode('', array_reverse(explode('/', $ate)));
-            $criteria->add(new TFilter('ZCM_DATA', '<=', $d));
-        }
-
-        if ($filial = TSession::getValue('hist_filial')) {
-            $criteria->add(new TFilter('ZCM_FILIAL', '=', $filial));
-        }
-
-        if ($doc = TSession::getValue('hist_doc')) {
-            $criteria->add(new TFilter('ZCM_DOC', 'like', "%{$doc}%"));
-        }
-
-        $objects = $repository->load($criteria);
-        $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 300 / 7];
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-
-        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-        foreach ($columns as $i => $col) {
-            $sheet->getColumnDimension($col)->setWidth($widths[$i]);
-        }
-
-        $headerStyle = [
-            'font' => [
-                'name' => 'Arial',
-                'size' => 10,
-                'bold' => true,
-                'color' => ['argb' => 'FFFFFF'],
-            ],
-            'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                'startColor' => ['argb' => '4B8BBE'],
-            ],
-            'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                    'color' => ['argb' => '000000'],
-                ],
-            ],
-        ];
-
-        $dataStyle = [
-            'font' => [
-                'name' => 'Arial',
-                'size' => 9,
-            ],
-            'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                    'color' => ['argb' => 'DDDDDD'],
-                ],
-            ],
-        ];
-
-        $scoreStyle = [
-            'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-            ],
-            'font' => [
-                'bold' => true,
-            ],
-            'numberFormat' => [
-                'formatCode' => '#,##0',
-            ],
-        ];
-
-        $sheet->setCellValue('A1', 'DOCUMENTO');
-        $sheet->setCellValue('B1', 'FILIAL');
-        $sheet->setCellValue('C1', 'DATA');
-        $sheet->setCellValue('D1', 'HORA');
-        $sheet->setCellValue('E1', 'USUÁRIO');
-        $sheet->setCellValue('F1', 'SCORE');
-        $sheet->setCellValue('G1', 'OBSERVAÇÃO');
-        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
-
-        $row = 1;
-        if ($objects) {
-            foreach ($objects as $obj) {
-                $row++;
-
-                $doc = $this->formatarDocumento($obj->ZCM_DOC);
-                $sheet->setCellValue('A' . $row, $doc);
-
-                $sheet->setCellValue('B' . $row, $obj->ZCM_FILIAL);
-
-                $dataFormatada = $this->formatarData($obj->ZCM_DATA);
-                $sheet->setCellValue('C' . $row, $dataFormatada);
-
-                $horaFormatada = $this->formatarHora($obj->ZCM_HORA);
-                $sheet->setCellValue('D' . $row, $horaFormatada);
-
-                $usuario = $obj->ZCM_USUGIR;
-                if (is_numeric($usuario)) {
-                    $usuario = str_pad($usuario, 4, '0', STR_PAD_LEFT);
-                }
-                $sheet->setCellValue('E' . $row, $usuario);
-
-                $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
-                $sheet->setCellValue('F' . $row, $score);
-
-                if ($score >= 90) {
-                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('C6EFCE');
-                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('006100');
-                } elseif ($score >= 70) {
-                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFEB9C');
-                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C6500');
-                } else {
-                    $sheet->getStyle('F' . $row)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-                    $sheet->getStyle('F' . $row)->getFill()->getStartColor()->setARGB('FFC7CE');
-                    $sheet->getStyle('F' . $row)->getFont()->getColor()->setARGB('9C0006');
-                }
-
-                $sheet->getStyle('F' . $row)->applyFromArray($scoreStyle);
-
-                $obs = $obj->ZCM_OBS ?? '';
-                if (strlen($obs) > 255) {
-                    $obs = substr($obs, 0, 252) . '...';
-                }
-                $sheet->setCellValue('G' . $row, $obs);
-
-                $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
-                $sheet->getRowDimension($row)->setRowHeight(-1);
+            if ($de = TSession::getValue('hist_data_de')) {
+                $d = implode('', array_reverse(explode('/', $de)));
+                $criteria->add(new TFilter('ZCM_DATA', '>=', $d));
             }
+
+            if ($ate = TSession::getValue('hist_data_ate')) {
+                $d = implode('', array_reverse(explode('/', $ate)));
+                $criteria->add(new TFilter('ZCM_DATA', '<=', $d));
+            }
+
+            if ($filial = TSession::getValue('hist_filial')) {
+                $criteria->add(new TFilter('ZCM_FILIAL', '=', $filial));
+            }
+
+            if ($doc = TSession::getValue('hist_doc')) {
+                $criteria->add(new TFilter('ZCM_DOC', 'like', "%{$doc}%"));
+            }
+
+            $objects = $repository->load($criteria);
+            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 300 / 7];
+
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+            foreach ($columns as $i => $col) {
+                $sheet->getColumnDimension($col)->setWidth($widths[$i]);
+            }
+
+            $headerStyle = [
+                'font' => [
+                    'name' => 'Arial',
+                    'size' => 10,
+                    'bold' => true,
+                    'color' => ['argb' => 'FFFFFF'],
+                ],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['argb' => '4B8BBE'],
+                ],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'color' => ['argb' => '000000'],
+                    ],
+                ],
+            ];
+
+            $dataStyle = [
+                'font' => [
+                    'name' => 'Arial',
+                    'size' => 9,
+                ],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'color' => ['argb' => 'DDDDDD'],
+                    ],
+                ],
+            ];
+
+            $scoreStyle = [
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                ],
+                'font' => [
+                    'bold' => true,
+                ],
+                'numberFormat' => [
+                    'formatCode' => '#,##0',
+                ],
+            ];
+
+            $sheet->setCellValue('A1', 'DOCUMENTO');
+            $sheet->setCellValue('B1', 'FILIAL');
+            $sheet->setCellValue('C1', 'DATA');
+            $sheet->setCellValue('D1', 'HORA');
+            $sheet->setCellValue('E1', 'USUÁRIO');
+            $sheet->setCellValue('F1', 'SCORE');
+            $sheet->setCellValue('G1', 'OBSERVAÇÃO');
+            $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+
+            $row = 1;
+            if ($objects) {
+                foreach ($objects as $obj) {
+                    $row++;
+
+                    $doc = $this->formatarDocumento($obj->ZCM_DOC);
+                    $sheet->setCellValue('A' . $row, $doc);
+
+                    $sheet->setCellValue('B' . $row, $obj->ZCM_FILIAL);
+
+                    $dataFormatada = $this->formatarData($obj->ZCM_DATA);
+                    $sheet->setCellValue('C' . $row, $dataFormatada);
+
+                    $horaFormatada = $this->formatarHora($obj->ZCM_HORA);
+                    $sheet->setCellValue('D' . $row, $horaFormatada);
+
+                    $usuario = $obj->ZCM_USUGIR;
+                    if (is_numeric($usuario)) {
+                        $usuario = str_pad($usuario, 4, '0', STR_PAD_LEFT);
+                    }
+                    $sheet->setCellValue('E' . $row, $usuario);
+
+                    $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
+                    $sheet->setCellValue('F' . $row, $score);
+
+                    $obs = $obj->ZCM_OBS ?? '';
+                    if (strlen($obs) > 255) {
+                        $obs = substr($obs, 0, 252) . '...';
+                    }
+                    $sheet->setCellValue('G' . $row, $obs);
+
+                    $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
+                    $sheet->getRowDimension($row)->setRowHeight(-1);
+                }
+            }
+
+            $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
+            $sheet->freezePane('A2');
+            $sheet->setAutoFilter('A1:G' . $row);
+
+            foreach ($columns as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(false);
+            }
+
+            $nome = 'historico_auditoria_' . date('Ymd_His') . '.xlsx';
+            $path = 'tmp/' . $nome;
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save($path);
+
+            TPage::openFile($path);
+            TTransaction::close();
+        } catch (Exception $e) {
+            new TMessage('error', $e->getMessage());
+            TTransaction::rollback();
         }
-
-        $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
-        $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:G' . $row);
-
-        foreach ($columns as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(false);
-        }
-
-        $nome = 'historico_auditoria_' . date('Ymd_His') . '.xlsx';
-        $path = 'tmp/' . $nome;
-
-        $writer = new Xlsx($spreadsheet);
-        $writer->save($path);
-
-        TPage::openFile($path);
-        TTransaction::close();
-    } catch (Exception $e) {
-        new TMessage('error', $e->getMessage());
-        TTransaction::rollback();
     }
-}
 
     private function formatarDocumento($doc)
     {

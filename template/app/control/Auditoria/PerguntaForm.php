@@ -40,9 +40,9 @@ class PerguntaForm extends TPage
         $score->addValidation('Score', new TRequiredValidator);
 
         $this->form->addFields([new TLabel('Etapa:')], [$etapa]);
-        $this->form->addFields([new TLabel('Tipo de Auditoria <span style="color:red">*</span>:', '#ff0000')], [$tipo]);
-        $this->form->addFields([new TLabel('Pergunta <span style="color:red">*</span>:', '#ff0000')], [$desc]);
-        $this->form->addFields([new TLabel('Score <span style="color:red">*</span>:', '#ff0000')], [$score]);
+        $this->form->addFields([new TLabel('Tipo de Auditoria')], [$tipo]);
+        $this->form->addFields([new TLabel('Pergunta')], [$desc]);
+        $this->form->addFields([new TLabel('Score')], [$score]);
 
         $btn = new TButton('save');
         $btn->setAction(new \Adianti\Control\TAction([$this, 'onSave']), 'Salvar');

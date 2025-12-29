@@ -59,7 +59,7 @@ class AuditoriaView extends TPage
         $col_etapa = new TDataGridColumn('zcn_etapa', 'Etapa', 'left', '8%');
         $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left', '28%');
         $col_resposta = new TDataGridColumn('zcn_naoco', 'Conformidade', 'center', '12%');
-        $col_score = new TDataGridColumn('zcl_score', 'Pontos', 'center', '12%');
+        $col_score = new TDataGridColumn('zcl_score', 'Score', 'center', '12%');
         $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
         $col_tipo_pergunta = new TDataGridColumn('zck_descri', 'Tipo', 'left', '10%');
 
