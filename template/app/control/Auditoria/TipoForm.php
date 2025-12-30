@@ -24,7 +24,7 @@ class TipoForm extends TPage
         $desc  = new TEntry('ZCK_DESCRI');
 
         $this->form->addFields([new TLabel('Código:')], [$tipo]);
-        $this->form->addFields([new TLabel('Descrição <span style="color:red">*</span>:')], [$desc]);
+        $this->form->addFields([new TLabel('Insperção <span style="color:red">*</span>:')], [$desc]);
 
         $btn = new TButton('save');
         $btn->setAction(new \Adianti\Control\TAction([$this, 'onSave']), 'Salvar');
@@ -38,7 +38,7 @@ class TipoForm extends TPage
     {
         try {
             if (empty($param['ZCK_DESCRI'])) {
-                throw new Exception('Descrição é obrigatória.');
+                throw new Exception('Insperção é obrigatória.');
             }
 
             TTransaction::open('auditoria');
@@ -64,7 +64,7 @@ class TipoForm extends TPage
             $obj->store();
 
             TTransaction::close();
-            new TMessage('info', 'Tipo cadastrado com sucesso!');
+            new TMessage('info', 'Insperção cadastrada com sucesso!');
         } catch (Exception $e) {
             TTransaction::rollback();
             new TMessage('error', $e->getMessage());

@@ -27,7 +27,7 @@ class PerguntaForm extends TPage
 
         $tipo = new TDBCombo('ZCL_TIPO', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_TIPO');
         $tipo->setSize('100%');
-        $tipo->setDefaultOption('Selecione o tipo de auditoria...');
+        $tipo->setDefaultOption('Selecione o tipo de insperção...');
         $tipo->addValidation('Tipo', new TRequiredValidator);
 
         $desc = new TEntry('ZCJ_DESCRI');
@@ -40,7 +40,7 @@ class PerguntaForm extends TPage
         $score->addValidation('Score', new TRequiredValidator);
 
         $this->form->addFields([new TLabel('Etapa:')], [$etapa]);
-        $this->form->addFields([new TLabel('Tipo de Auditoria')], [$tipo]);
+        $this->form->addFields([new TLabel('Tipo de Insperção')], [$tipo]);
         $this->form->addFields([new TLabel('Pergunta')], [$desc]);
         $this->form->addFields([new TLabel('Score')], [$score]);
 
@@ -59,7 +59,7 @@ class PerguntaForm extends TPage
                 throw new Exception('O campo Pergunta é obrigatório.');
             }
             if (empty($param['ZCL_TIPO'])) {
-                throw new Exception('Selecione um tipo de auditoria.');
+                throw new Exception('Selecione um tipo de insperção.');
             }
             if (empty($param['ZCL_SCORE']) || !in_array($param['ZCL_SCORE'], ['1', '2'])) {
                 throw new Exception('Selecione um score válido (1 ou 2).');
