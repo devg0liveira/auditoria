@@ -24,9 +24,7 @@ class checkListForm extends TPage
     [
         'C'  => 'Conforme',
         'NC' => 'Não Conforme',
-        'OP' => 'Oportunidade de melhoria',
-        'P'  => 'Parcialmente',
-        'NV' => 'Não auditado'
+        'NA' => 'Não auditado'
     ];
 
     public function __construct()
@@ -173,7 +171,7 @@ class checkListForm extends TPage
             foreach ($perguntas as $p) {
                 $etapa = $p->ZCJ_ETAPA;
                 $value = $data->{"resposta_{$etapa}"} ?? '';
-                $required = in_array($value, ['NC', 'P', 'OP']);
+                $required = in_array($value, ['NC']);
                 $js .= "var f = document.getElementById('obs_{$etapa}'); if(f) f.required = " . ($required ? 'true' : 'false') . ";\n";
             }
             if ($js) {
@@ -226,7 +224,7 @@ class checkListForm extends TPage
         $etapa = $param['etapa'] ?? '';
         $value = $param['value'] ?? '';
         if ($etapa !== '') {
-            $required = in_array($value, ['NC', 'P', 'OP']);
+            $required = in_array($value, ['NC']);
             TScript::create("var field = document.getElementById('obs_{$etapa}'); if(field) field.required = " . ($required ? 'true' : 'false') . ";");                           
         }
     }
@@ -351,7 +349,7 @@ class checkListForm extends TPage
 
             $z->ZCN_NAOCO = $resp;
 
-            if (in_array($resp, ['NC', 'P', 'OP'])) {
+            if (in_array($resp, ['NC'])) {
                 $z->ZCN_SCORE = $scores[$etapa] ?? 0;
             } else {
                 $z->ZCN_SCORE = 0;
@@ -573,7 +571,7 @@ class checkListForm extends TPage
                     return false;
                 }
 
-                if (in_array($resposta, ['NC','P','OP'])) {
+                if (in_array($resposta, ['NC'])) {
                     $obs = $dados_salvos['observacoes'][$etapa] 
                         ?? ($dados_salvos_temp["obs_{$etapa}"] ?? '');
 

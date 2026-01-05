@@ -59,7 +59,7 @@ class IniciativaForm extends TPage
                     ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA 
                     AND cj.D_E_L_E_T_ <> '*'
                 WHERE cn.ZCN_DOC = :doc 
-                  AND cn.ZCN_NAOCO IN ('NC', 'P', 'OP')
+                  AND cn.ZCN_NAOCO IN ('NC')
                   AND cn.D_E_L_E_T_ <> '*'
                 ORDER BY cn.ZCN_ETAPA, cn.ZCN_SEQ
             ");
@@ -83,7 +83,7 @@ class IniciativaForm extends TPage
             $this->form->addContent([
                 "<b>Auditoria:</b> {$doc}<br>
                  <span class='badge badge-secondary'>Total: {$total}</span>
-                 <span class='badge badge-warning'>Em andamento: {$pendentes}</span>
+                 <span class='badge badge-warning'>Aguardando resposta: {$pendentes}</span>
                  <span class='badge badge-success'>Concluídos: {$concluidos}</span>
                  <hr>"
             ]);
@@ -119,7 +119,7 @@ class IniciativaForm extends TPage
 
         $badge = $status === 'C'
             ? "<span class='badge badge-success'>Concluído</span>"
-            : "<span class='badge badge-warning'>Em andamento</span>";
+            : "<span class='badge badge-warning'>Aguardando resposta</span>";
 
         $this->form->addContent([
             "<details open>
@@ -164,7 +164,7 @@ class IniciativaForm extends TPage
 
         $status_combo = new TCombo("status_{$key}");
         $status_combo->addItems([
-            'A' => 'Em andamento',
+            'A' => 'Aguardando resposta',
             'C' => 'Concluído'
         ]);
         $status_combo->setSize('100%');

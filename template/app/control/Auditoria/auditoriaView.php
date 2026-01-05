@@ -30,7 +30,8 @@ class AuditoriaView extends TPage
         $doc = new TEntry('zcm_doc');
         $filial = new TEntry('zcm_filial');
         $tipo_desc = new TEntry('tipo_descricao');
-        $datahora = new TEntry('zcm_datahora');
+        $data = new TEntry('zcm_data');
+        $hora = new TEntry('zcm_hora');
         $usuario = new TEntry('zcm_usuario');
         $score = new TEntry('score');
         $obs = new TText('zcm_obs');
@@ -38,7 +39,8 @@ class AuditoriaView extends TPage
         $doc->setEditable(false);
         $filial->setEditable(false);
         $tipo_desc->setEditable(false);
-        $datahora->setEditable(false);
+        $data->setEditable(false);
+        $hora->setEditable(false);
         $usuario->setEditable(false);
         $score->setEditable(false);
         $obs->setEditable(false);
@@ -46,7 +48,8 @@ class AuditoriaView extends TPage
 
         $this->form->addFields([new TLabel('Documento')], [$doc]);
         $this->form->addFields([new TLabel('Filial')], [$filial]);
-        $this->form->addFields([new TLabel('Data/Hora')], [$datahora]);
+        $this->form->addFields([new TLabel('Data')], [$data]);
+        $this->form->addFields([new TLabel('Hora')], [$hora]);
         $this->form->addFields([new TLabel('Usuário')], [$usuario]);
         $this->form->addFields([new TLabel('Score Final')], [$score]);
         $this->form->addFields([new TLabel('Observações Gerais')], [$obs]);
@@ -66,11 +69,9 @@ class AuditoriaView extends TPage
         $col_resposta->setTransformer(function ($value) {
             $value = trim($value);
             return match ($value) {
-                'NC' => 'NC - Não Conforme',
-                'P'  => 'P - Parcial',
-                'OP' =>'OP - Oportunidade de Melhoria',
-                'C'  => 'C - Conforme</span>',
-                'NV' =>'NV - Não Visto',
+                'NC' => 'Não Conforme',
+                'C'  => 'Conforme',
+                'NA' =>'Não Auditado',
                 default=>'',
             };
         });
@@ -121,13 +122,15 @@ public function onReload($param = null)
             throw new Exception('Auditoria não encontrada.');
         }
 
-        $datahora = $this->formatarData($row_cab['ZCM_DATA']) . ' ' . $this->formatarHora($row_cab['ZCM_HORA']);
+        $data = $this->formatarData($row_cab['ZCM_DATA']);
+        $hora = $this->formatarHora($row_cab['ZCM_HORA']);
 
         $form_data = new stdClass;
         $form_data->zcm_doc     = trim($row_cab['ZCM_DOC']);
         $form_data->zcm_filial  = trim($row_cab['ZCM_FILIAL']);
         $form_data->zcm_tipo    = trim($row_cab['ZCM_TIPO']);
-        $form_data->zcm_datahora = $datahora;
+        $form_data->zcm_data = $data;
+        $form_data->zcm_hora = $hora;
         $form_data->zcm_usuario = trim($row_cab['ZCM_USUGIR']);
         $form_data->zcm_obs     = trim($row_cab['ZCM_OBS'] ?? '');
 
@@ -180,7 +183,7 @@ public function onReload($param = null)
             $this->datagrid->addItem($item);
 
             $naoco = trim($row['ZCN_NAOCO'] ?? '');
-            if (in_array($naoco, ['NC', 'P', 'OP'])) {
+            if (in_array($naoco, ['NC'])) {
                 $perda += (int)$row['ZCL_SCORE'];
             }
         }
@@ -209,12 +212,11 @@ public function onReload($param = null)
         return $data;
     }
 
-    private function formatarHora($hora)
+    private function formatarHora($value)
     {
-        if ($hora && strlen($hora) >= 4 && is_numeric($hora)) {
-            $hora = str_pad($hora, 6, '0', STR_PAD_LEFT);
-            return substr($hora, 0, 2) . ':' . substr($hora, 2, 2) . ':' . substr($hora, 4, 2);
+        if ($value && strlen($value) >= 4 && is_numeric($value)) {
+            return substr($value, 0, 2) . ':' . substr($value, 2, 2);
         }
-        return $hora;
+        return $value;
     }
 }

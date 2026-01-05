@@ -84,7 +84,6 @@ class HistoricoList extends TStandardList
         $this->form->addAction('Pesquisar', new TAction([$this, 'onSearch']), 'fa:search blue');
 
         $this->form->style = 'display:none; width: 100%; overflow-x: auto;';
-
     }
 
     private function buildDatagrid()
@@ -99,8 +98,24 @@ class HistoricoList extends TStandardList
         $col_data    = new TDataGridColumn('ZCM_DATA',    'Data',        'center', '10%');
         $col_hora    = new TDataGridColumn('ZCM_HORA',    'Hora',        'center', '8%');
         $col_usuario = new TDataGridColumn('ZCM_USUGIR', 'Usuário',     'left',   '15%');
-        $col_score   = new TDataGridColumn('score_calculado', 'Score',   'center', '10%');
-        $col_obs     = new TDataGridColumn('ZCM_OBS',     'Observações', 'left',   '33%');
+        $conformes = new TDataGridColumn('conformes', 'Conformes', 'center', '8%');
+        $naoconformes = new TDataGridColumn('naoconformes', 'Não Conformes', 'center', '8%');
+        $naoauditados = new TDataGridColumn('naoauditados', 'Não Auditados', 'center', '8%');
+        $col_obs     = new TDataGridColumn('ZCM_OBS',     'Observações', 'left',   '20%');
+        $col_obs->setTransformer(function ($value) {
+            if (!$value) {
+                return '';
+            }
+
+            $limite = 10;
+
+            if (strlen($value) > $limite) {
+                return substr($value, 0, $limite) . '...';
+            }
+
+            return $value;
+        });
+
 
         $col_data->setTransformer([$this, 'formatarData']);
         $col_hora->setTransformer([$this, 'formatarHora']);
@@ -110,7 +125,9 @@ class HistoricoList extends TStandardList
         $this->datagrid->addColumn($col_data);
         $this->datagrid->addColumn($col_hora);
         $this->datagrid->addColumn($col_usuario);
-        $this->datagrid->addColumn($col_score);
+        $this->datagrid->addColumn($conformes);
+        $this->datagrid->addColumn($naoconformes);
+        $this->datagrid->addColumn($naoauditados);
         $this->datagrid->addColumn($col_obs);
 
         $action_view = new TDataGridAction([$this, 'onView'], ['zcm_doc' => '{ZCM_DOC}']);
@@ -134,43 +151,75 @@ class HistoricoList extends TStandardList
     }
 
     private function buildPanel()
-{
-    $this->pageNavigation = new TPageNavigation();
-    $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
+    {
+        $this->pageNavigation = new TPageNavigation();
+        $this->pageNavigation->setAction(new TAction([$this, 'onReload']));
 
-    $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
+        $panel = new TPanelGroup('Histórico de Auditorias Finalizadas');
 
-    $panel->getBody()->style = 'overflow-x: auto';
+        $panel->getBody()->style = 'overflow-x: auto';
 
-    $panel->add($this->form);
-    $panel->add($this->datagrid);
-    $panel->addFooter($this->pageNavigation);
+        $panel->add($this->form);
+        $panel->add($this->datagrid);
+        $panel->addFooter($this->pageNavigation);
 
-    $filter_link = new TButton('filter_button');
-    $filter_link->class = 'btn btn-primary btn-sm';
-    $filter_link->setLabel('Filtros');
-    $filter_link->setImage('fa:filter');
-    $filter_link->onclick = "$('[name=form_filtro_historico]').slideToggle('medium');
+        $filter_link = new TButton('filter_button');
+        $filter_link->class = 'btn btn-primary btn-sm';
+        $filter_link->setLabel('Filtros');
+        $filter_link->setImage('fa:filter');
+        $filter_link->onclick = "$('[name=form_filtro_historico]').slideToggle('medium');
                           $(this).toggleClass('active');";
 
-    $panel->addHeaderWidget($filter_link);
+        $panel->addHeaderWidget($filter_link);
 
-    $panel->addHeaderActionLink(
-        'Nova Auditoria',
-        new TAction(['inicioAuditoriaModal', 'onLoad']),
-        'fa:plus-circle green'
-    );
+        $panel->addHeaderActionLink(
+            'Nova Auditoria',
+            new TAction(['inicioAuditoriaModal', 'onLoad']),
+            'fa:plus-circle green'
+        );
 
-    $action = new TAction([$this, 'ExcelExport']);
-    $action->setParameter('register_state', 'false');
+        $action = new TAction([$this, 'ExcelExport']);
+        $action->setParameter('register_state', 'false');
 
-    $panel->addHeaderActionLink(
-        '<i style="margin-right: 5px;"></i> Exportar XLS',
-        $action
-    )->class = 'btn btn-success btn-sm';
+        $panel->addHeaderActionLink(
+            '<i style="margin-right: 5px;"></i> Exportar XLS',
+            $action
+        )->class = 'btn btn-success btn-sm';
 
-    parent::add($panel);
-}
+        parent::add($panel);
+    }
+
+
+    private function contarRespostas($doc, $tipo)
+    {
+        try {
+            TTransaction::open('auditoria');
+            $count = ZCN010::where('ZCN_DOC', '=', $doc)
+                ->where('ZCN_NAOCO', '=', $tipo)
+                ->where('D_E_L_E_T_', '<>', '*')
+                ->count();
+            TTransaction::close();
+            return $count;
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+
+    public function calcularConformes($doc)
+    {
+        return $this->contarRespostas($doc, 'C');
+    }
+
+    public function calcularNaoConformes($doc)
+    {
+        return $this->contarRespostas($doc, 'NC');
+    }
+
+    public function calcularNaoAuditados($doc)
+    {
+        return $this->contarRespostas($doc, 'NA');
+    }
 
 
     public function onToggleFilters()
@@ -250,6 +299,9 @@ class HistoricoList extends TStandardList
             if ($objects) {
                 foreach ($objects as $object) {
                     $object->score_calculado = $this->calcularScore(trim($object->ZCM_DOC));
+                    $object->conformes = $this->calcularConformes($object->ZCM_DOC);
+                    $object->naoconformes = $this->calcularNaoConformes($object->ZCM_DOC);
+                    $object->naoauditados = $this->calcularNaoAuditados($object->ZCM_DOC);
                     $this->datagrid->addItem($object);
                 }
             }
@@ -297,7 +349,7 @@ class HistoricoList extends TStandardList
             $perda = 0;
             foreach ($rows as $row) {
                 $naoco = trim($row['ZCN_NAOCO'] ?? '');
-                if (in_array($naoco, ['NC', 'P', 'OP'])) {
+                if (in_array($naoco, ['NC'])) {
                     $perda += (int)$row['ZCL_SCORE'];
                 }
             }
@@ -323,7 +375,7 @@ class HistoricoList extends TStandardList
                 SELECT COUNT(*) as total 
                 FROM ZCN010 
                 WHERE ZCN_DOC = :doc 
-                  AND ZCN_NAOCO IN ('NC', 'P', 'OP')
+                  AND ZCN_NAOCO IN ('NC')
                   AND (ZCN_STATUS IS NULL OR ZCN_STATUS <> 'C')
                   AND D_E_L_E_T_ <> '*'
             ";
@@ -358,7 +410,7 @@ class HistoricoList extends TStandardList
             }
 
             $conn = TTransaction::get();
-            $sql = "SELECT COUNT(*) as total FROM ZCN010 WHERE ZCN_DOC = :doc AND ZCN_NAOCO IN ('NC','P','OP') AND (ZCN_OBS IS NULL OR TRIM(ZCN_OBS) = '') AND D_E_L_E_T_ <> '*'";
+            $sql = "SELECT COUNT(*) as total FROM ZCN010 WHERE ZCN_DOC = :doc AND ZCN_NAOCO IN ('NC' AND (ZCN_OBS IS NULL OR TRIM(ZCN_OBS) = '') AND D_E_L_E_T_ <> '*'";
             $stmt = $conn->prepare($sql);
             $stmt->execute([':doc' => $object->ZCM_DOC]);
             $result = $stmt->fetch();
@@ -435,12 +487,12 @@ class HistoricoList extends TStandardList
             }
 
             $objects = $repository->load($criteria);
-            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 300 / 7];
+            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 100 / 7, 100 / 7, 100 / 7, 300 / 7];
 
             $spreadsheet = new Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
 
-            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
             foreach ($columns as $i => $col) {
                 $sheet->getColumnDimension($col)->setWidth($widths[$i]);
             }
@@ -502,7 +554,10 @@ class HistoricoList extends TStandardList
             $sheet->setCellValue('E1', 'USUÁRIO');
             $sheet->setCellValue('F1', 'SCORE');
             $sheet->setCellValue('G1', 'OBSERVAÇÃO');
-            $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+            $sheet->setCellValue('H1', 'CONFORMES');
+            $sheet->setCellValue('I1', 'NÃO CONFORMES');
+            $sheet->setCellValue('J1', 'NÃO AUDITADOS');
+            $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
 
             $row = 1;
             if ($objects) {
@@ -534,15 +589,18 @@ class HistoricoList extends TStandardList
                         $obs = substr($obs, 0, 252) . '...';
                     }
                     $sheet->setCellValue('G' . $row, $obs);
+                    $sheet->setCellValue('H' . $row, $this->calcularConformes($obj->ZCM_DOC));
+                    $sheet->setCellValue('I' . $row, $this->calcularNaoConformes($obj->ZCM_DOC));
+                    $sheet->setCellValue('J' . $row, $this->calcularNaoAuditados($obj->ZCM_DOC));
 
-                    $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataStyle);
+                    $sheet->getStyle('A' . $row . ':J' . $row)->applyFromArray($dataStyle);
                     $sheet->getRowDimension($row)->setRowHeight(-1);
                 }
             }
 
             $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
             $sheet->freezePane('A2');
-            $sheet->setAutoFilter('A1:G' . $row);
+            $sheet->setAutoFilter('A1:J' . $row);
 
             foreach ($columns as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(false);
