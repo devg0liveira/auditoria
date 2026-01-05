@@ -26,7 +26,7 @@ class checkListForm extends TPage
         'NC' => 'Não Conforme',
         'OP' => 'Oportunidade de melhoria',
         'P'  => 'Parcialmente',
-        'NV' => 'Não visto'
+        'NV' => 'Não auditado'
     ];
 
     public function __construct()
@@ -227,7 +227,7 @@ class checkListForm extends TPage
         $value = $param['value'] ?? '';
         if ($etapa !== '') {
             $required = in_array($value, ['NC', 'P', 'OP']);
-            TScript::create("var field = document.getElementById('obs_{$etapa}'); if(field) field.required = " . ($required ? 'true' : 'false') . ";");
+            TScript::create("var field = document.getElementById('obs_{$etapa}'); if(field) field.required = " . ($required ? 'true' : 'false') . ";");                           
         }
     }
 

@@ -20,7 +20,6 @@ use Adianti\Widget\Container\TVBox;
 use Adianti\Control\TAction;
 use Adianti\Widget\Dialog\TQuestion;
 use Adianti\Widget\Datagrid\TPageNavigation;
-use Adianti\Database\TCriteria;
 
 class PerguntaForm extends TPage
 {
@@ -40,7 +39,7 @@ class PerguntaForm extends TPage
 
         $tipo = new TDBCombo('ZCL_TIPO', 'auditoria', 'ZCK010', 'ZCK_TIPO', 'ZCK_DESCRI', 'ZCK_TIPO');
         $tipo->setSize('100%');
-        $tipo->setDefaultOption('Selecione o tipo de insperção...');
+        $tipo->setDefaultOption('Selecione o tipo de inspeção...');
         $tipo->addValidation('Tipo', new TRequiredValidator);
 
         $desc = new TEntry('ZCJ_DESCRI');
@@ -53,7 +52,7 @@ class PerguntaForm extends TPage
         $score->addValidation('Score', new TRequiredValidator);
 
         $this->form->addFields([new TLabel('Etapa:')], [$etapa]);
-        $this->form->addFields([new TLabel('Tipo de Insperção')], [$tipo]);
+        $this->form->addFields([new TLabel('Tipo de inspeção')], [$tipo]);
         $this->form->addFields([new TLabel('Pergunta')], [$desc]);
         $this->form->addFields([new TLabel('Score')], [$score]);
 
@@ -68,7 +67,7 @@ class PerguntaForm extends TPage
 
         $col_etapa = new TDataGridColumn('ZCJ_ETAPA', 'Etapa', 'center', '10%');
         $col_pergunta = new TDataGridColumn('ZCJ_DESCRI', 'Pergunta', 'left', '35%');
-        $col_tipo = new TDataGridColumn('tipo_descricao', 'Tipo Insperção', 'left', '20%');
+        $col_tipo = new TDataGridColumn('tipo_descricao', 'Tipo inspeção', 'left', '20%');
         $col_score = new TDataGridColumn('ZCL_SCORE', 'Score', 'center', '10%');
         $col_status = new TDataGridColumn('status_label', 'Status', 'center', '10%');
         $col_data = new TDataGridColumn('ZCJ_DATA', 'Data', 'center', '15%');
@@ -325,7 +324,7 @@ class PerguntaForm extends TPage
                 throw new Exception('O campo Pergunta é obrigatório.');
             }
             if (empty($param['ZCL_TIPO'])) {
-                throw new Exception('Selecione um tipo de insperção.');
+                throw new Exception('Selecione um tipo de inspeção.');
             }
             if (empty($param['ZCL_SCORE']) || !in_array($param['ZCL_SCORE'], ['1', '2'])) {
                 throw new Exception('Selecione um score válido (1 ou 2).');

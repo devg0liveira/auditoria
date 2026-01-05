@@ -126,7 +126,7 @@ class HistoricoList extends TStandardList
 
         $action_iniciativa = new TDataGridAction(['IniciativaForm', 'onEdit'], ['doc' => '{ZCM_DOC}']);
         $action_iniciativa->setLabel('Iniciativa');
-        $action_iniciativa->setImage('fa:lightbulb yellow');
+        $action_iniciativa->setImage('fa:lightbulb red');
         $action_iniciativa->setDisplayCondition([$this, 'deveExibirIniciativa']);
         $this->datagrid->addAction($action_iniciativa);
 

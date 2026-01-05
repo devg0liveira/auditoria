@@ -112,11 +112,11 @@
     <menuitem label='Auditoria'>
         <icon>fa-check-double fa-fw</icon>
         <menu>
-            <menuitem label='Insperções'>
+            <menuitem label='Inspeções'>
                 <icon>fas:file-alt fa-fw</icon>
                 <action>HistoricoList</action>
             </menuitem>
-            <menuitem label='Etapas De Insperção'>
+            <menuitem label='Etapas De inspeção'>
                 <icon>fas:plus</icon>
                 <action>TipoForm</action>
             </menuitem>
