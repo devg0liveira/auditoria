@@ -52,6 +52,7 @@ class HistoricoList extends TStandardList
         $this->form = new BootstrapFormBuilder('form_filtro_historico');
         $this->form->setFormTitle('Filtros de Pesquisa');
 
+
         $data_de  = new TDate('data_de');
         $data_ate = new TDate('data_ate');
         $filial   = new TEntry('filial');
@@ -298,7 +299,7 @@ class HistoricoList extends TStandardList
 
             if ($objects) {
                 foreach ($objects as $object) {
-                    $object->score_calculado = $this->calcularScore(trim($object->ZCM_DOC));
+                    //$object->score_calculado = $this->calcularScore(trim($object->ZCM_DOC));
                     $object->conformes = $this->calcularConformes($object->ZCM_DOC);
                     $object->naoconformes = $this->calcularNaoConformes($object->ZCM_DOC);
                     $object->naoauditados = $this->calcularNaoAuditados($object->ZCM_DOC);
@@ -487,12 +488,13 @@ class HistoricoList extends TStandardList
             }
 
             $objects = $repository->load($criteria);
-            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 100 / 7, 100 / 7, 100 / 7, 300 / 7];
+            $widths = [150 / 7, 120 / 7, 120 / 7, 100 / 7, 150 / 7, 100 / 7, 100 / 7, 100 / 7, 
+            300 / 7];
 
             $spreadsheet = new Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
 
-            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+            $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
             foreach ($columns as $i => $col) {
                 $sheet->getColumnDimension($col)->setWidth($widths[$i]);
             }
@@ -535,7 +537,7 @@ class HistoricoList extends TStandardList
                 ],
             ];
 
-            $scoreStyle = [
+           /* $scoreStyle = [
                 'alignment' => [
                     'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
                 ],
@@ -546,19 +548,19 @@ class HistoricoList extends TStandardList
                     'formatCode' => '#,##0',
                 ],
             ];
+            */
 
             $sheet->setCellValue('A1', 'DOCUMENTO');
             $sheet->setCellValue('B1', 'FILIAL');
             $sheet->setCellValue('C1', 'DATA');
             $sheet->setCellValue('D1', 'HORA');
             $sheet->setCellValue('E1', 'USUÁRIO');
-            $sheet->setCellValue('F1', 'SCORE');
-            $sheet->setCellValue('G1', 'OBSERVAÇÃO');
-            $sheet->setCellValue('H1', 'CONFORMES');
-            $sheet->setCellValue('I1', 'NÃO CONFORMES');
-            $sheet->setCellValue('J1', 'NÃO AUDITADOS');
-            $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
-
+            //$sheet->setCellValue('F1', 'SCORE');
+            $sheet->setCellValue('F1', 'CONFORMES');
+            $sheet->setCellValue('G1', 'NÃO CONFORMES');
+            $sheet->setCellValue('H1', 'NÃO AUDITADOS');
+            $sheet->setCellValue('I1', 'OBSERVAÇÃO');
+            $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
             $row = 1;
             if ($objects) {
                 foreach ($objects as $obj) {
@@ -581,26 +583,26 @@ class HistoricoList extends TStandardList
                     }
                     $sheet->setCellValue('E' . $row, $usuario);
 
-                    $score = round($this->calcularScore(trim($obj->ZCM_DOC)));
-                    $sheet->setCellValue('F' . $row, $score);
+                    //$score = round($this->calcularScore(trim($obj->ZCM_DOC)));
+                    //$sheet->setCellValue('F' . $row, $score);
 
                     $obs = $obj->ZCM_OBS ?? '';
                     if (strlen($obs) > 255) {
                         $obs = substr($obs, 0, 252) . '...';
                     }
-                    $sheet->setCellValue('G' . $row, $obs);
-                    $sheet->setCellValue('H' . $row, $this->calcularConformes($obj->ZCM_DOC));
-                    $sheet->setCellValue('I' . $row, $this->calcularNaoConformes($obj->ZCM_DOC));
-                    $sheet->setCellValue('J' . $row, $this->calcularNaoAuditados($obj->ZCM_DOC));
+                    $sheet->setCellValue('F' . $row, $this->calcularConformes($obj->ZCM_DOC));
+                    $sheet->setCellValue('G' . $row, $this->calcularNaoConformes($obj->ZCM_DOC));
+                    $sheet->setCellValue('H' . $row, $this->calcularNaoAuditados($obj->ZCM_DOC));
+                    $sheet->setCellValue('I' . $row, $obs);
 
-                    $sheet->getStyle('A' . $row . ':J' . $row)->applyFromArray($dataStyle);
+                    $sheet->getStyle('A' . $row . ':I' . $row)->applyFromArray($dataStyle);
                     $sheet->getRowDimension($row)->setRowHeight(-1);
                 }
             }
 
-            $sheet->getStyle('G2:G' . $row)->getAlignment()->setWrapText(true);
+            $sheet->getStyle('I2:I' . $row)->getAlignment()->setWrapText(true);
             $sheet->freezePane('A2');
-            $sheet->setAutoFilter('A1:J' . $row);
+            $sheet->setAutoFilter('A1:I' . $row);
 
             foreach ($columns as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(false);

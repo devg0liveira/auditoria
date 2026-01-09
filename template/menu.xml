@@ -140,20 +140,20 @@
             </menuitem>
         </menu>
     </menuitem>
-
-    <menuitem label='Treino'>
-        <icon>fa-table</icon>
+    <menuitem label='Biblioteca'>
+        <icon>fa-book</icon>
         <menu>
-            <menuitem label='Cadastro'>
-                <icon>fas:file-alt fa-fw</icon>
-                <action>Cadastro</action>
+            <menuitem label='Lista de Livros'>
+                <icon>fas:book-reader fa-fw</icon>
+                <action>livroList</action>
             </menuitem>
-            <menuitem label='Lista de usuarios'>
-                <icon>fas:file-alt fa-fw</icon>
-                <action>Page</action>
+            <menuitem label='Cadastro de Livros'>
+                <icon>fas:book-reader fa-fw</icon>
+                <action>livroForm</action>
             </menuitem>
         </menu>
     </menuitem>
+
     <menuitem label='Logout'>
         <action>LoginForm#method=onLogout#static=1</action>
         <icon>fas:sign-out-alt fa-fw</icon>

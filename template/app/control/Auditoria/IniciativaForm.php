@@ -12,9 +12,15 @@ use Adianti\Widget\Dialog\TMessage;
 use Adianti\Widget\Dialog\TQuestion;
 use Adianti\Database\TTransaction;
 use Adianti\Core\AdiantiCoreApplication;
+use Adianti\Database\TCriteria;
+use Adianti\Database\TFilter;
+use Adianti\Database\TRepository;
+use Adianti\Registry\TSession;
 use Adianti\Validator\TMinLengthValidator;
 use Adianti\Validator\TRequiredValidator;
 use Adianti\Wrapper\BootstrapFormBuilder;
+use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 class IniciativaForm extends TPage
 {
@@ -28,6 +34,11 @@ class IniciativaForm extends TPage
         $this->form->setFormTitle('Plano de Ação – Iniciativas de Melhoria');
 
         $this->form->addHeaderAction('Voltar', new TAction(['HistoricoList', 'onReload']), 'fa:arrow-left red');
+        /*$this->form->addHeaderActionLink(
+            '<i style="margin-right: 5px;"></i> Exportar XLS',
+            new TAction(['IniciativaForm', 'onExportXLS'])
+            )->class = 'btn btn-success btn-sm';
+            */
         $this->form->addHeaderAction('Salvar alterações', new TAction([$this, 'onConfirmSave']), 'fa:save green');
     }
 
@@ -39,6 +50,8 @@ class IniciativaForm extends TPage
             if (!$doc || trim($doc) === '') {
                 throw new Exception('Auditoria não identificada.');
             }
+
+            TSession::setValue('hist_doc', $doc);
 
             TTransaction::open('auditoria');
             $conn = TTransaction::get();
@@ -150,7 +163,7 @@ class IniciativaForm extends TPage
         $prazo = new TDate("prazo_{$key}");
         $prazo->setMask('dd/mm/yyyy');
         $prazo->setSize('100%');
-        $prazo->setValue($this->formatDate($nc['ZCN_PRAZO']));
+        $prazo->setValue(self::formatDate($nc['ZCN_PRAZO']));
         $prazo->setEditable(!$readonly);
         if (!$readonly) {
             $prazo->addValidation('Prazo', new TRequiredValidator);
@@ -159,7 +172,7 @@ class IniciativaForm extends TPage
         $exec = new TDate("exec_{$key}");
         $exec->setMask('dd/mm/yyyy');
         $exec->setSize('100%');
-        $exec->setValue($this->formatDate($nc['ZCN_DATA_EXEC']));
+        $exec->setValue(self::formatDate($nc['ZCN_DATA_EXEC']));
         $exec->setEditable(!$readonly);
 
         $status_combo = new TCombo("status_{$key}");
@@ -295,7 +308,7 @@ class IniciativaForm extends TPage
         return null;
     }
 
-    private function formatDate($date)
+    private static function formatDate($date)
     {
         $date = trim($date ?? '');
         if (strlen($date) === 8 && ctype_digit($date)) {
@@ -303,4 +316,150 @@ class IniciativaForm extends TPage
         }
         return '';
     }
+/*
+    public static function onExportXLS($param)
+    {
+        try {
+            TTransaction::open('auditoria');
+            $conn = TTransaction::get();
+
+            $doc = TSession::getValue('hist_doc');
+
+            if (!$doc) {
+                throw new Exception('Auditoria não identificada.');
+            }
+
+            $stmt = $conn->prepare("
+                SELECT 
+                    cn.ZCN_ETAPA,
+                    cn.ZCN_SEQ,
+                    cj.ZCJ_DESCRI,
+                    cn.ZCN_ACAO,
+                    cn.ZCN_RESP,
+                    cn.ZCN_PRAZO,
+                    cn.ZCN_DATA_EXEC,
+                    cn.ZCN_STATUS,
+                    cn.ZCN_OBS
+                FROM ZCN010 cn
+                INNER JOIN ZCJ010 cj 
+                    ON cj.ZCJ_ETAPA = cn.ZCN_ETAPA
+                   AND cj.D_E_L_E_T_ <> '*'
+                WHERE cn.ZCN_DOC = :doc
+                  AND cn.ZCN_NAOCO = 'NC'
+                  AND cn.D_E_L_E_T_ <> '*'
+                ORDER BY cn.ZCN_ETAPA, cn.ZCN_SEQ
+            ");
+            $stmt->execute([':doc' => $doc]);
+            $objects = $stmt->fetchAll(PDO::FETCH_OBJ);
+
+            if (!$objects) {
+                throw new Exception('Nenhuma iniciativa encontrada.');
+            }
+
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            $columns = ['A','B','C','D','E','F','G','H','I'];
+            $widths  = [80/7, 80/7, 250/7, 250/7, 120/7, 90/7, 110/7, 120/7, 300/7];
+
+            foreach ($columns as $i => $col) {
+                $sheet->getColumnDimension($col)->setWidth($widths[$i]);
+            }
+
+            $headerStyle = [
+                'font' => [
+                    'name' => 'Arial',
+                    'size' => 10,
+                    'bold' => true,
+                    'color' => ['argb' => 'FFFFFF'],
+                ],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['argb' => '4B8BBE'],
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    ],
+                ],
+            ];
+
+            $dataStyle = [
+                'font' => [
+                    'name' => 'Arial',
+                    'size' => 9,
+                ],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+                    'vertical'   => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'color' => ['argb' => 'DDDDDD'],
+                    ],
+                ],
+            ];
+
+            $sheet->setCellValue('A1', 'ETAPA');
+            $sheet->setCellValue('B1', 'SEQ');
+            $sheet->setCellValue('C1', 'DESCRIÇÃO');
+            $sheet->setCellValue('D1', 'AÇÃO');
+            $sheet->setCellValue('E1', 'RESPONSÁVEL');
+            $sheet->setCellValue('F1', 'PRAZO');
+            $sheet->setCellValue('G1', 'DATA EXECUÇÃO');
+            $sheet->setCellValue('H1', 'STATUS');
+            $sheet->setCellValue('I1', 'OBSERVAÇÕES');
+
+            $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
+
+            $row = 1;
+            foreach ($objects as $obj) {
+                $row++;
+
+                $sheet->setCellValue('A'.$row, $obj->ZCN_ETAPA);
+                $sheet->setCellValue('B'.$row, $obj->ZCN_SEQ);
+                $sheet->setCellValue('C'.$row, $obj->ZCJ_DESCRI);
+                $sheet->setCellValue('D'.$row, $obj->ZCN_ACAO);
+                $sheet->setCellValue('E'.$row, $obj->ZCN_RESP);
+                $sheet->setCellValue('F'.$row, self::formatDate($obj->ZCN_PRAZO));
+                $sheet->setCellValue('G'.$row, self::formatDate($obj->ZCN_DATA_EXEC));
+                $sheet->setCellValue(
+                    'H'.$row,
+                    $obj->ZCN_STATUS === 'C' ? 'Concluído' : 'Aguardando resposta'
+                );
+
+                $obs = $obj->ZCN_OBS ?? '';
+                if (strlen($obs) > 255) {
+                    $obs = substr($obs, 0, 252) . '...';
+                }
+                $sheet->setCellValue('I'.$row, $obs);
+
+                $sheet->getStyle('A'.$row.':I'.$row)->applyFromArray($dataStyle);
+                $sheet->getRowDimension($row)->setRowHeight(-1);
+            }
+
+            $sheet->getStyle('C2:D'.$row)->getAlignment()->setWrapText(true);
+            $sheet->getStyle('I2:I'.$row)->getAlignment()->setWrapText(true);
+
+            $sheet->freezePane('A2');
+            $sheet->setAutoFilter('A1:I'.$row);
+
+            $nome = 'plano_acao_iniciativas_' . date('Ymd_His') . '.xlsx';
+            $path = 'tmp/' . $nome;
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save($path);
+
+            TPage::openFile($path);
+            TTransaction::close();
+
+        } catch (Exception $e) {
+            if (TTransaction::get()) {
+                TTransaction::rollback();
+            }
+            new TMessage('error', $e->getMessage());
+        }
+    }
+    */
 }

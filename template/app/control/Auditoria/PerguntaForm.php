@@ -47,7 +47,7 @@ class PerguntaForm extends TPage
         $desc->addValidation('Pergunta', new TRequiredValidator);
 
         $score = new TCombo('ZCL_SCORE');
-        $score->addItems(['1' => '1', '2' => '2']);
+        $score->addItems(['1' => '1']);
         $score->setDefaultOption('Selecione o score');
         $score->addValidation('Score', new TRequiredValidator);
 

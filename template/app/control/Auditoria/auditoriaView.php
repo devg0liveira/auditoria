@@ -33,7 +33,7 @@ class AuditoriaView extends TPage
         $data = new TEntry('zcm_data');
         $hora = new TEntry('zcm_hora');
         $usuario = new TEntry('zcm_usuario');
-        $score = new TEntry('score');
+        //$score = new TEntry('score');
         $obs = new TText('zcm_obs');
 
         $doc->setEditable(false);
@@ -42,7 +42,7 @@ class AuditoriaView extends TPage
         $data->setEditable(false);
         $hora->setEditable(false);
         $usuario->setEditable(false);
-        $score->setEditable(false);
+        //$score->setEditable(false);
         $obs->setEditable(false);
         $obs->setSize('100%', 50);
 
@@ -51,7 +51,7 @@ class AuditoriaView extends TPage
         $this->form->addFields([new TLabel('Data')], [$data]);
         $this->form->addFields([new TLabel('Hora')], [$hora]);
         $this->form->addFields([new TLabel('Usuário')], [$usuario]);
-        $this->form->addFields([new TLabel('Score Final')], [$score]);
+        //$this->form->addFields([new TLabel('Score Final')], [$score]);
         $this->form->addFields([new TLabel('Observações Gerais')], [$obs]);
 
         $this->datagrid = new BootstrapDatagridWrapper(new TDataGrid);
@@ -62,7 +62,7 @@ class AuditoriaView extends TPage
         $col_etapa = new TDataGridColumn('zcn_etapa', 'Etapa', 'left', '8%');
         $col_pergunta = new TDataGridColumn('zcj_descri', 'Pergunta', 'left', '28%');
         $col_resposta = new TDataGridColumn('zcn_naoco', 'Conformidade', 'center', '12%');
-        $col_score = new TDataGridColumn('zcl_score', 'Score', 'center', '12%');
+        //$col_score = new TDataGridColumn('zcl_score', 'Score', 'center', '12%');
         $col_obs = new TDataGridColumn('zcn_obs', 'Observações', 'left', '30%');
         $col_tipo_pergunta = new TDataGridColumn('zck_descri', 'Tipo', 'left', '10%');
 
@@ -80,7 +80,7 @@ class AuditoriaView extends TPage
         $this->datagrid->addColumn($col_pergunta);
         $this->datagrid->addColumn($col_tipo_pergunta);
         $this->datagrid->addColumn($col_resposta);
-        $this->datagrid->addColumn($col_score);
+        //$this->datagrid->addColumn($col_score);
         $this->datagrid->addColumn($col_obs);
 
         $this->datagrid->createModel();
@@ -175,7 +175,7 @@ public function onReload($param = null)
                 'zcn_etapa'  => trim($row['ZCN_ETAPA'] ?? ''),
                 'zcj_descri' => trim($row['ZCJ_DESCRI'] ?? ''),
                 'zcn_naoco'  => trim($row['ZCN_NAOCO'] ?? ''),
-                'zcl_score'  => (int)$row['ZCL_SCORE'],
+                //'zcl_score'  => (int)$row['ZCL_SCORE'],
                 'zcn_obs'    => trim($row['ZCN_OBS'] ?? ''),
                 'zck_descri' => trim($row['ZCK_DESCRI'] ?? '')
             ];
@@ -188,7 +188,7 @@ public function onReload($param = null)
             }
         }
 
-        $form_data->score = 120 - $perda;
+        //$form_data->score = 120 - $perda;
         $this->form->setData($form_data);
 
         TTransaction::close();
